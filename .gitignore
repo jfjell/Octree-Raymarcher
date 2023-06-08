@@ -1,0 +1,11 @@
+.vscode/*
+obj/*
+lib/*
+include/*
+*.dll
+*.exe
+*.o
+*.d
+*.lib
+*.ilk
+*.pdb
