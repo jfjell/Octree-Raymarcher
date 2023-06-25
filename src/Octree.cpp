@@ -11,7 +11,12 @@ using glm::vec2;
 
 inline int branch(bool x, bool y, bool z)
 {
-    return x | (y << 1) | (z << 2);
+    assert(x == 1 || x == 0);
+    assert(y == 1 || y == 0);
+    assert(z == 1 || z == 0);
+    int i = x + y * 2 + z * 4;
+    assert(i >= 0 && i < 8);
+    return i;
 }
 
 inline void cut(int branch, float &x, float &y, float &z)
@@ -21,7 +26,7 @@ inline void cut(int branch, float &x, float &y, float &z)
     z = (float)!!(branch & 4);
 }
 
-Octree * generateWorldDumb(vec3 pos, size_t depth, float size, float scale, float amp)
+Octree * growTreeRec(vec3 pos, size_t depth, float size, float scale, float amp)
 {
 
     float half = size / 2;
@@ -63,7 +68,7 @@ Octree * generateWorldDumb(vec3 pos, size_t depth, float size, float scale, floa
         {
             float x, y, z;
             cut(i, x, y, z);
-            Octree *b = generateWorldDumb(pos + vec3(x, y, z) * half, depth - 1, half, scale, amp);
+            Octree *b = growTreeRec(pos + vec3(x, y, z) * half, depth - 1, half, scale, amp);
             if (b)
             {
                 if (!t)
@@ -105,6 +110,7 @@ void addLeafAt(Octree *t, vec3 pos)
         {
             Octree *b = new Octree();
             memset(b->branches, 0, sizeof(b->branches));
+            b->parent = t;
             b->position = t->position + vec3(xg, yg, zg) * half;
             b->depth = t->depth - 1;
             b->size = vec3(half, half, half);
@@ -115,12 +121,10 @@ void addLeafAt(Octree *t, vec3 pos)
     }
 }
 
-Octree * generateWorld(vec3 pos, size_t depth, int size, float amplitude, float phase, float shift)
+/* O(2^2d)*/
+Octree * growTree(vec3 pos, size_t depth, int size, float amplitude, float phase, float shift)
 {
-    using glm::vec3;
-    using glm::vec2;
-    using glm::perlin;
-    using glm::min;
+    using namespace glm;
 
     assert(depth > 0);
 
@@ -158,7 +162,7 @@ Octree * generateWorld(vec3 pos, size_t depth, int size, float amplitude, float 
             if (y >= pos.y && y <= pos.y + size)
                 addLeafAt(root, vec3(x, y, z));
 
-            // Check neighbours height -- may need to add more trees in order to prevent holes.
+            // Check neighbours height -- may need to add more leaves in order to prevent holes.
             vec2 left  = vec2(pos.x + smallsize * ((float)i - 0.5), pos.z + smallsize * ((float)k + 0.5));
             vec2 right = vec2(pos.x + smallsize * ((float)i + 1.5), pos.z + smallsize * ((float)k + 0.5));
             vec2 back  = vec2(pos.x + smallsize * ((float)i + 0.5), pos.z + smallsize * ((float)k + 1.5));
@@ -180,6 +184,17 @@ Octree * generateWorld(vec3 pos, size_t depth, int size, float amplitude, float 
     }
 
     return root;
+}
+
+void plantCubes(const Octree *tree, Mesh& mesh)
+{
+    if (tree == nullptr)
+        return;
+    else if (tree->leaf)
+        addCube(mesh, tree->position, tree->size);
+    else
+        for (int i = 0; i < 8; ++i)
+            plantCubes(tree->branches[i], mesh);
 }
 
 int pbr(const Octree *t, vec3 p)
@@ -249,18 +264,7 @@ void plantLeaf(const Octree *root, const Octree *tree, Mesh& mesh)
         mesh.add(yQuadVertices, 4, value_ptr(as), value_ptr(tree->size), quadUV, quadIndices, 6);
 }
 
-void plantMesh(const Octree *tree, Mesh& mesh)
+void plantFaces(const Octree *tree, Mesh& mesh)
 {
     plantLeaf(tree, tree, mesh);
-}
-
-void plantMeshDumb(const Octree *tree, Mesh& mesh)
-{
-    if (tree == nullptr)
-        return;
-    else if (tree->leaf)
-        addCube(mesh, tree->position, tree->size);
-    else
-        for (int i = 0; i < 8; ++i)
-            plantMeshDumb(tree->branches[i], mesh);
 }

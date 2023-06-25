@@ -75,6 +75,9 @@ void initialize()
     if (!window)
         die("SDL_CreateWindow: %s\n", SDL_GetError());
 
+    SDL_ShowCursor(SDL_DISABLE);
+    SDL_SetRelativeMouseMode(SDL_TRUE);
+
     glContext = SDL_GL_CreateContext(window);
     if (!glContext)
         die("SDL_GL_CreateContext: %s\n", SDL_GetError());
@@ -161,48 +164,134 @@ void drawMesh(Mesh& mesh)
     glBindVertexArray(0);
 }
 
-int randInt(int min, int max)
-{
-    return rand() % (max - min) + min;
-}
+#define CHUNKS 4
+#define CHUNKS3 ((CHUNKS)*(CHUNKS)*(CHUNKS))
 
-/*
-void generateRandomCubes(Mesh& mesh)
+Octree ** generateWorld()
 {
     using glm::vec3;
 
-    srand(time(NULL));
-    for (int i = 0; i < 1000; ++i)
-    {
-        addCube(mesh, vec3(randInt(-100, 100), randInt(-100, 100), randInt(-100, 100)), vec3(randInt(1, 5), randInt(1, 5), randInt(1, 5)));
-    }
-}
-*/
+    const int CHUNKSIZE = 16;
+    const int DEPTH = 5;
 
-/*
-void generateWorld(Mesh& mesh)
-{
-    using glm::vec2;
-    using glm::vec3;
+    assert(CHUNKS % 2 == 0);
 
-    int low = -20, high = 20, ampl = 10;
-    for (int x = low; x <= high; ++x)
+    Octree **chunk = new Octree*[CHUNKS3];
+
+    int start = -CHUNKS / 2;
+    int end = CHUNKS / 2;
+
+    int i = 0;
+    for (int x = start; x != end; ++x)
     {
-        for (int z = low; z <= high; ++z)
+        for (int y = start; y != end; ++y)
         {
-            float y = glm::perlin(vec2((float)x / high, (float)z / high)) * ampl;
-            addCube(mesh, vec3(x, y, z), vec3(1, 1, 1));
+            for (int z = start; z != end; ++z)
+            {
+                vec3 p = vec3((float)x, (float)y, (float)z) * (float)CHUNKSIZE;
+                chunk[i++] = growTree(p, DEPTH, CHUNKSIZE, 16., 0.125, 0.);
+            }
         }
     }
-}*/
+    assert(i == CHUNKS3);
 
-int getNodes(const Octree *t)
+    return chunk;
+}
+
+Mesh * generateMesh(Octree **chunk)
 {
-    if(!t) return 0;
-    int n = 1;
-    for (int i = 0; i < 8; ++i)
-        n += getNodes(t->branches[i]);
-    return n;
+    Mesh *mesh = new Mesh[CHUNKS3];
+    for (int i = 0; i < CHUNKS3; ++i)
+    {
+        mesh[i] = Mesh();
+        plantCubes(chunk[i], mesh[i]);
+    }
+    return mesh;
+}
+
+struct RaymarchedCube
+{
+    unsigned vao, vbo, ebo, tex;
+    int im, is;
+    Shader shader;
+
+    RaymarchedCube();
+    ~RaymarchedCube();
+    void draw();
+};
+
+
+RaymarchedCube::RaymarchedCube()
+{
+    static const float vertices[3*8] = {
+        0., 0., 0.,
+        0., 0., 1.,
+        0., 1., 0.,
+        0., 1., 1.,
+        1., 0., 0.,
+        1., 0., 1.,
+        1., 1., 0.,
+        1., 1., 1.,
+    };
+
+    static const unsigned short indices[3*6*2] = {
+        0, 4, 6,
+        6, 2, 0,
+        1, 0, 2,
+        2, 3, 1,
+        5, 7, 3,
+        3, 1, 5,
+        4, 5, 7,
+        7, 6, 4,
+        4, 0, 1,
+        1, 5, 4,
+        2, 6, 7,
+        7, 3, 2,
+    };
+
+    glGenVertexArrays(1, &this->vao);
+    glBindVertexArray(this->vao);
+
+    glGenBuffers(1, &this->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
+    glEnableVertexAttribArray(0);
+
+    glGenBuffers(1, &this->ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+    glGenTextures(1, &this->tex);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, this->tex);
+    SDL_Surface *st = IMG_Load("textures/quad.png");
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, st->w, st->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, st->pixels);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    SDL_FreeSurface(st);
+
+    this->shader.compile("shaders/raymarch.vertex.glsl");
+    this->shader.compile("shaders/raymarch.fragment.glsl");
+    this->shader.link();
+    this->im = glGetUniformLocation(shader.program, "mvp");
+    this->is = glGetUniformLocation(shader.program, "sampler");
+
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+RaymarchedCube::~RaymarchedCube()
+{
+
+}
+
+void RaymarchedCube::draw()
+{
+
 }
 
 int main() 
@@ -211,47 +300,21 @@ int main()
 
     Stopwatch sw;
 
+    /*
     printf("Generating world...\n"); sw.start();
-    int CHUNKS = 4;
-    int CHUNKS3 = CHUNKS*CHUNKS*CHUNKS;
-    float CHUNKSIZE = 16;
-    Octree *chunk[CHUNKS3];
-    memset(chunk, 0, sizeof(chunk));
-    Mesh mesh[CHUNKS3];
-    int chunkIndex = 0;
-    int depth = 5;
-    int total = 0;
-    for (int x = -CHUNKS/2; x < CHUNKS/2; ++x)
-    {
-        for (int y = -CHUNKS/2; y < CHUNKS/2; ++y)
-        {
-            for (int z = -CHUNKS/2; z < CHUNKS/2; ++z)
-            {
-                vec3 pos = vec3((float)x, (float)y, (float)z) * CHUNKSIZE;
-                // chunk[chunkIndex++] = generateWorldDumb(pos * CHUNKSIZE, depth, CHUNKSIZE, 0.125, 16);
-                chunk[chunkIndex++] = generateWorld(pos, depth, CHUNKSIZE, 16., 0.125, 0.);
-                int n = getNodes(chunk[chunkIndex-1]);
-                total += n;
-                printf("Chunk #%d at (%f, %f, %f): %d tree(s)\n", chunkIndex - 1, pos.x, pos.y, pos.z, n);
-            }
-        }
-    }
+    Octree **chunks = generateWorld();
     double gentime = sw.stop();
     printf("%lfs\n", gentime);
-    printf("Total: %d nodes\n", total);
+
     printf("Generating mesh...\n"); 
     sw.start();
-    assert(chunkIndex == CHUNKS3);
-    for (int i = 0; i < CHUNKS3; ++i)
-    {
-        mesh[i] = Mesh();
-        plantMeshDumb(chunk[i], mesh[i]);
-        printf("Mesh #%d: %llu vertices\n", i, mesh[i].vertices.size());
-    }
+    Mesh *mesh = generateMesh(chunks);
     double meshtime = sw.stop();
-    // addCube(mesh, vec3(0, 0, 0), vec3(1, 1, 1));
+    printf("%lfs\n", meshtime);
+    */
 
-    printf("%lfs\nInitializing ", meshtime); sw.start();
+    printf("Initializing...\n"); 
+    sw.start();
 
     initialize();
 
@@ -283,8 +346,10 @@ int main()
     printf("|ebo|: %llu\n", mesh.indices.size());
     */
 
+    /*
     for (int i = 0; i < CHUNKS3; ++i)
         mesh[i].finalize();
+    */
 
     double frametime = 0;
     while (running) 
@@ -303,16 +368,15 @@ int main()
         glUniformMatrix4fv(mvpIndex, 1, GL_FALSE, glm::value_ptr(mvp));
         glUniform1i(samplerIndex, 0);
 
+        /*
         for (int i = 0; i < CHUNKS3; ++i)
             drawMesh(mesh[i]);
+        */
 
         drawText(text, frametime);
 
         glUseProgram(0);
         
-        SDL_ShowCursor(SDL_DISABLE);
-        SDL_SetRelativeMouseMode(SDL_TRUE);
-
         ++frameCount;
 
         frametime = sw.stop();
