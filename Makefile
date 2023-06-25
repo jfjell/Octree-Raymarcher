@@ -5,12 +5,10 @@ LD=clang++
 CXXFLAGS=-Iinclude \
 	-Wall \
 	-Wextra \
-	-Werror \
 	-DSDL_MAIN_HANDLED \
 	-D_CRT_SECURE_NO_WARNINGS \
 	-std=c++17 \
-	-O0 \
-	-g
+	-O0 -g
 LDFLAGS=-Llib \
 	-lSDL2main \
 	-lSDL2 \

@@ -17,6 +17,8 @@
 #include "Mesh.h"
 #include "Octree.h"
 #include "Input.h"
+#include "BoundsPyramid.h"
+#include "Debug.h"
 
 SDL_Window *window;
 SDL_GLContext glContext;
@@ -31,7 +33,7 @@ glm::vec3 direction, right, up;
 glm::mat4 mvp;
 Input input;
 
-void glCallback(GLenum source, 
+__attribute__ ((stdcall)) void glCallback(GLenum source, 
     GLenum type, 
     GLuint id, 
     GLenum severity, 
@@ -59,6 +61,7 @@ void initialize()
 
     if (IMG_Init(IMG_INIT_PNG) < 0)
         die("IMG_Init: %s\n", IMG_GetError());
+
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
@@ -92,7 +95,6 @@ void initialize()
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
     glDebugMessageCallback(glCallback, NULL);
-
 }
 
 void deinitialize()
@@ -167,6 +169,7 @@ void drawMesh(Mesh& mesh)
 #define CHUNKS 4
 #define CHUNKS3 ((CHUNKS)*(CHUNKS)*(CHUNKS))
 
+/*
 Octree ** generateWorld()
 {
     using glm::vec3;
@@ -197,7 +200,9 @@ Octree ** generateWorld()
 
     return chunk;
 }
+*/
 
+/*
 Mesh * generateMesh(Octree **chunk)
 {
     Mesh *mesh = new Mesh[CHUNKS3];
@@ -208,6 +213,7 @@ Mesh * generateMesh(Octree **chunk)
     }
     return mesh;
 }
+*/
 
 struct RaymarchedCube
 {
@@ -272,8 +278,8 @@ RaymarchedCube::RaymarchedCube()
     glGenerateMipmap(GL_TEXTURE_2D);
     SDL_FreeSurface(st);
 
-    this->shader.compile("shaders/raymarch.vertex.glsl");
-    this->shader.compile("shaders/raymarch.fragment.glsl");
+    this->shader.compile("shaders/raymarch.vertex.glsl", GL_VERTEX_SHADER);
+    this->shader.compile("shaders/raymarch.fragment.glsl", GL_FRAGMENT_SHADER);
     this->shader.link();
     this->im = glGetUniformLocation(shader.program, "mvp");
     this->is = glGetUniformLocation(shader.program, "sampler");
@@ -292,6 +298,62 @@ RaymarchedCube::~RaymarchedCube()
 void RaymarchedCube::draw()
 {
 
+}
+
+using glm::vec3;
+
+static inline int twigbit(int x, int y, int z)
+{
+    int i = x * 4 * 4 + y * 4 + z;
+    assert(i >= 0 && i < 64);
+    return i;
+}
+
+static inline void cutbranch(int i, bool *xg, bool *yg, bool *zg)
+{
+    *xg = i & 1;
+    *yg = i & 2;
+    *zg = i & 4;
+}
+
+void makeCube(Ocroot *r, Octree t, vec3 pos, float size, Mesh *m)
+{
+    switch (t.type)
+    {
+        case EMPTY:
+            return;
+        case LEAF:
+            // printf("Leaf at %f,%f,%f, size %f!\n", pos.x, pos.y, pos.z, size);
+            addCube(*m, pos, vec3(size, size, size));
+            return;
+        case TWIG:
+        {
+            float leafSize = size / (1 << TWIG_LEVELS);
+            Octwig twig = r->twig[t.offset];
+            // printf("Twig at %f,%f,%f, value %016llx, each size %f!\n", pos.x, pos.y, pos.z, twig.leafmap[0], leafSize);
+            for (int y = 0; y < TWIG_SIZE; ++y)
+                for (int z = 0; z < TWIG_SIZE; ++z)
+                    for (int x = 0; x < TWIG_SIZE; ++x)
+                        if (twig.leafmap[0] & (1 << twigbit(x, y, z)))
+                            addCube(*m, pos + vec3(x, y, z) * leafSize, vec3(leafSize, leafSize, leafSize));
+            return;
+        }
+        case BRANCH:
+        {
+            for (int i = 0; i < 8; ++i)
+            {
+                bool xg, yg, zg;
+                cutbranch(i, &xg, &yg, &zg);
+                makeCube(r, r->tree[t.offset + i], pos + vec3(xg, yg, zg) * (size / 2), size / 2, m);
+            }
+            return;
+        }
+    }
+}
+
+void makeOctreeCubeMesh(Ocroot *r, Mesh *m)
+{
+    makeCube(r, r->tree[0], r->position, r->size, m);
 }
 
 int main() 
@@ -313,9 +375,25 @@ int main()
     printf("%lfs\n", meshtime);
     */
 
-    printf("Initializing...\n"); 
-    sw.start();
+    SW_START(sw, "Generating bounded pyramid");
+    BoundsPyramid pyramid(1 << 10, 16, 0.125, 0, 0, 16);
+    SW_STOP(sw);
+    // print(&pyramid);
 
+    void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsPyramid *pyr);
+
+    SW_START(sw, "Generating octree");
+    Ocroot root;
+    grow(&root, vec3(0, 0, 0), 128, 7, &pyramid);
+    SW_STOP(sw);
+    print(&root);
+
+    SW_START(sw, "Generating mesh");
+    Mesh mesh;
+    makeOctreeCubeMesh(&root, &mesh);
+    SW_STOP(sw);
+
+    SW_START(sw, "Initializing OpenGL and SDL");
     initialize();
 
     initializeControls();
@@ -329,8 +407,12 @@ int main()
     int mvpIndex = glGetUniformLocation(shader.program, "mvp");
     int samplerIndex = glGetUniformLocation(shader.program, "samp");
 
-    double inittime = sw.stop();
-    printf("%fs\n", inittime);
+    SW_STOP(sw);
+
+    SW_START(sw, "Finalizing mesh");
+    mesh.finalize();
+    SW_STOP(sw);
+    print(&mesh);
 
 
     /*
@@ -367,6 +449,8 @@ int main()
 
         glUniformMatrix4fv(mvpIndex, 1, GL_FALSE, glm::value_ptr(mvp));
         glUniform1i(samplerIndex, 0);
+
+        drawMesh(mesh);
 
         /*
         for (int i = 0; i < CHUNKS3; ++i)
