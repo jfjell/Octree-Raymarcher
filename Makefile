@@ -5,6 +5,7 @@ LD=clang++
 CXXFLAGS=-Iinclude \
 	-Wall \
 	-Wextra \
+	-Werror \
 	-DSDL_MAIN_HANDLED \
 	-D_CRT_SECURE_NO_WARNINGS \
 	-std=c++17 \

@@ -3,7 +3,6 @@
 #include <glm/vec2.hpp>
 #include <glm/common.hpp>
 #include <glm/gtc/noise.hpp>
-#define private public
 #include "BoundsPyramid.h"
 
 static inline bool ispowof2(int i)
@@ -47,8 +46,8 @@ void BoundsPyramid::computeBounds(int lv, int x0, int y0, int x1, int y1, float 
     {
         assert(lv < this->levels);
 
-        float *ll = bounds[lv][0];
-        float *hl = bounds[lv][1];
+        float *ll = bounds[lv][MIN];
+        float *hl = bounds[lv][MAX];
         computeBounds(lv+1, x0*2, y0*2, x0*2+1, y0*2+1, &ll[nw], &hl[nw]);
         computeBounds(lv+1, x1*2, y0*2, x1*2+1, y0*2+1, &ll[ne], &hl[ne]);
         computeBounds(lv+1, x0*2, y1*2, x0*2+1, y1*2+1, &ll[sw], &hl[sw]);
@@ -89,8 +88,8 @@ BoundsPyramid::BoundsPyramid(int size, float ampl, float period, float xshift, f
     {
         int s = pow2(i);
         this->bounds[i] = new float*[2];
-        this->bounds[i][0] = new float[s*s];
-        this->bounds[i][1] = new float[s*s];
+        this->bounds[i][MIN] = new float[s*s];
+        this->bounds[i][MAX] = new float[s*s];
     }
 
     this->computeBase(ampl, period, xshift, yshift, zshift);
@@ -101,8 +100,8 @@ BoundsPyramid::~BoundsPyramid()
 {
     for (int i = 0; i < levels; ++i)
     {
-        for (int j = 0; j < 2; ++j)
-            delete[] this->bounds[i][j];
+        delete[] this->bounds[i][MIN];
+        delete[] this->bounds[i][MAX];
         delete[] this->bounds[i];
     }
     delete[] this->bounds;
@@ -112,17 +111,17 @@ BoundsPyramid::~BoundsPyramid()
 
 float BoundsPyramid::min(float xf, float yf, int lv) const
 {
-    return this->bound(xf, yf, 0, lv);
+    return this->bound(xf, yf, MIN, lv);
 }
 
 float BoundsPyramid::max(float xf, float yf, int lv) const
 {
-    return this->bound(xf, yf, 1, lv);
+    return this->bound(xf, yf, MAX, lv);
 }
 
 float BoundsPyramid::bound(float xf, float yf, int b, int lv) const
 {
-    assert(b == 0 || b == 1);
+    assert(b == MIN || b == MAX);
     assert(xf >= 0 && xf <= 1);
     assert(yf >= 0 && yf <= 1);
 

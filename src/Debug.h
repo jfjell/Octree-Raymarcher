@@ -11,7 +11,7 @@
 
 #define SW_STOP(sw) printf("%fs\n", sw.stop())
 
-class BoundsPyramid;
+struct BoundsPyramid;
 void print(const BoundsPyramid *pyr);
 
 struct Ocroot;

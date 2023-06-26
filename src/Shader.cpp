@@ -1,25 +1,14 @@
 #include <GL/glew.h>
-#include "Shader.h"
+#include "Draw.h"
 #include "Util.h"
 
-Shader::Shader()
-{
-    this->program = glCreateProgram();
-}
-
-Shader::~Shader()
-{
-    glDeleteProgram(this->program);
-    this->program = 0;
-}
-
-void Shader::compile(const char *path, GLenum type)
+unsigned Shader::compileAttach(const char *path, GLenum type, unsigned program)
 {
     unsigned shader = glCreateShader(type);
     char *glsl = readFile(path);
     glShaderSource(shader, 1, &glsl, 0);
-    delete[] glsl;
     glCompileShader(shader);
+
     int compiled;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
     if (!compiled)
@@ -31,23 +20,29 @@ void Shader::compile(const char *path, GLenum type)
         die("glCompileShader(\"%s\"): %s\n", path, log);
         delete[] log;
     }
-    glAttachShader(this->program, shader);
+    glAttachShader(program, shader);
+
+    delete[] glsl;
     glDeleteShader(shader);
+
+    return program;
 }
 
-unsigned Shader::link()
+unsigned Shader::link(unsigned program)
 {
-    glLinkProgram(this->program);
+    glLinkProgram(program);
+
     int linked;
-    glGetProgramiv(this->program, GL_LINK_STATUS, &linked);
+    glGetProgramiv(program, GL_LINK_STATUS, &linked);
     if (!linked)
     {
         int size;
-        glGetProgramiv(this->program, GL_INFO_LOG_LENGTH, &size);
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &size);
         char *log = new char[size];
-        glGetProgramInfoLog(this->program, size, &size, log);
+        glGetProgramInfoLog(program, size, &size, log);
         die("glLinkProgram: %s\n", log);
         delete[] log;
     }
-    return this->program;
+
+    return program;
 }

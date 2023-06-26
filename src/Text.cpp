@@ -5,6 +5,7 @@
 #include <SDL2/SDL_ttf.h>
 #include <GL/glew.h>
 #include "Text.h"
+#include "Draw.h"
 
 static const float vertices[] = {
     -1.0, -1.0,
@@ -39,9 +40,10 @@ Text::Text(const char *path, int size, int width, int height)
     this->ypos = space;
     this->surface = SDL_CreateRGBSurface(0, width, height, 32, 0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff);
 
-    shader.compile("shaders/text.vrtx.glsl", GL_VERTEX_SHADER);
-    shader.compile("shaders/text.frag.glsl", GL_FRAGMENT_SHADER);
-    shader.link();
+    this->shader = glCreateProgram();
+    Shader::compileAttach("shaders/text.vrtx.glsl", GL_VERTEX_SHADER, this->shader);
+    Shader::compileAttach("shaders/text.frag.glsl", GL_FRAGMENT_SHADER, this->shader);
+    Shader::link(this->shader);
 
     glGenVertexArrays(1, &this->vao);
     glBindVertexArray(this->vao);
@@ -113,14 +115,14 @@ void Text::clear()
 void Text::draw()
 {
     // Copy texture data and draw
-    glUseProgram(this->shader.program);
+    glUseProgram(this->shader);
     glBindVertexArray(this->vao);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, this->tex);
     if (this->redraw)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, surface->w, surface->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, surface->pixels);
-    int samplerIndex = glGetUniformLocation(this->shader.program, "samp");
+    int samplerIndex = glGetUniformLocation(this->shader, "samp");
     glUniform1i(samplerIndex, 0);
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)0);

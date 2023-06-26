@@ -3,14 +3,13 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <vector>
-#include "Shader.h"
 
 struct Text
 {
     TTF_Font *font;
     SDL_Surface *surface;
     std::vector<char> buf;
-    Shader shader;
+    unsigned shader;
     const char *path;
     int space, size;
     int width, height;

@@ -1,9 +1,8 @@
 #include <stdio.h>
 #include "Debug.h"
 #include "Octree.h"
-#include "Mesh.h"
-#define private public
 #include "BoundsPyramid.h"
+#include "Draw.h"
 
 #define C putchar
 
@@ -82,6 +81,9 @@ void print(const Ocroot *root)
     printf("#Trees: %llu\n", root->trees);
     printf("#Twigs: %llu\n", root->twigs);
 
+    printf("Used %f%% of tree address space!\n", 100.f * (float)root->trees / (double)(uint32_t)~(3 << 30));
+    printf("Used %f%% of twig address space!\n", 100.f * (float)root->twigs / (double)(uint32_t)~(3 << 30));
+
     // printTree(root, 0);
 
     C('\n');
@@ -90,8 +92,8 @@ void print(const Ocroot *root)
 void print(const Mesh *mesh)
 {
     printf("Mesh\n");
-    printf("#Vertex coordinates: %llu\n", mesh->vertices.size());
-    printf("#UV coordinates: %llu\n", mesh->uv.size());
+    printf("#Vertex coordinates: %llu\n", mesh->vtxcoords.size());
+    printf("#UV coordinates: %llu\n", mesh->uvcoords.size());
     printf("#Indices: %llu\n", mesh->indices.size());
 
     C('\n');

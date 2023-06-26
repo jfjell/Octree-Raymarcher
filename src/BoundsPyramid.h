@@ -3,9 +3,10 @@
 #ifndef BOUNDPYRAMID_H
 #define BOUNDPYRAMID_H
 
-class BoundsPyramid
+struct BoundsPyramid
 {
-private:
+    static constexpr int MIN = 0, MAX = 1;
+
     float ***bounds;
     float *base;
     int size;
@@ -15,7 +16,6 @@ private:
     void computeBounds(int lv, int x0, int y0, int x1, int y1, float *lo, float *hi);
     float bound(float xf, float yf, int b, int lv) const;
 
-public:
     BoundsPyramid(const BoundsPyramid&) = delete;
     BoundsPyramid operator=(const BoundsPyramid&) = delete;
 
