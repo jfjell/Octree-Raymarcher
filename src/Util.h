@@ -9,6 +9,7 @@ struct Stopwatch
 {
     void start();
     double stop();
+    double elapsed();
 
     uintmax_t counter;
 };

@@ -26,14 +26,13 @@ int width = 800, height = 600;
 glm::vec3 position = glm::vec3(0.f, 0.f, 0.f);
 float vertAngle = 0.f, horzAngle = 0.f;
 float fov = 90.f;
-float speed = 2.f, sensitivity = 0.004f;
+float speed = .75f, sensitivity = 0.004f;
 int frameCount = 0;
 glm::vec3 direction, right, up;
 glm::mat4 mvp;
 Input input;
 
 void computeMVP();
-void drawText(Text *text, double frametime);
 void initialize();
 void deinitialize();
 void initializeControls();
@@ -45,16 +44,17 @@ int main()
 
     Stopwatch sw;
 
+    int depth = 9;
     // Height pyramid for world gen
     SW_START(sw, "Generating bounded pyramid");
-    BoundsPyramid pyramid(1 << 11, 16, 1.0 / (1 << 10), 0, 0, 16);
+    BoundsPyramid pyramid(1 << depth, 16, 1.0 / (1 << depth), 0, 0, 16);
     SW_STOP(sw);
     print(&pyramid);
 
     // Tree
     SW_START(sw, "Generating octree");
     Ocroot root;
-    grow(&root, vec3(0, 0, 0), 128, 9, &pyramid);
+    grow(&root, vec3(0, 0, 0), 128, depth, &pyramid);
     SW_STOP(sw);
 
     print(&root);
@@ -62,7 +62,8 @@ int main()
     // Mesh
     SW_START(sw, "Generating mesh");
     // OctreeCubefaceDrawer d;
-    OctreeCubemapDrawer d;
+    // OctreeCubemapDrawer d;
+    ParallaxDrawer d;
     d.loadTree(&root); 
     SW_STOP(sw);
     print(&d.mesh);
@@ -79,10 +80,14 @@ int main()
     d.loadGL("textures/quad.png");
     SW_STOP(sw);
 
-    double frametime = 0;
+    Stopwatch theoframe, realframe, textframe;
+    textframe.start();
+    double real = 0, theo = 0;
+
     while (running) 
     {
-        sw.start();
+        realframe.start();
+        theoframe.start();
 
         input.poll();
 
@@ -91,15 +96,26 @@ int main()
         glClearColor(0.3, 0.3, 0.6, 1.);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        d.draw(mvp);
+        // d.draw(mvp);
+        d.draw(mvp, position);
 
-        drawText(&text, frametime);
+        if (textframe.elapsed() > 1. / 24)
+        {
+            text.clear();
+            text.printf("frame time: %lfs, theoretical fps: %lf, real fps: %lf", theo, 1.0 / theo, 1.0 / real);
+            text.printf("w: %d, h: %d", width, height);
+            text.printf("fov: %f, h: %f, v: %f", fov, glm::degrees(horzAngle), glm::degrees(vertAngle));
+            text.printf("x: %f, y: %f, z: %f, ", position.x, position.y, position.z);
 
-        ++frameCount;
+            textframe.start();
+        }
+        text.draw();
 
-        frametime = sw.stop();
+        theo = theoframe.stop();
 
         SDL_GL_SwapWindow(window);
+
+        real = realframe.stop();
     }
 
     text.~Text();
@@ -110,25 +126,29 @@ int main()
 
 void computeMVP()
 {
-    float cv = cos(vertAngle), sv = sin(vertAngle), ch = cos(horzAngle), sh = sin(horzAngle);
-    direction = glm::vec3(cv * sh, sv, cv * ch);
-    right = glm::vec3(sin(horzAngle - M_PI/2.f), 0, cos(horzAngle - M_PI/2.f));
-    up = glm::cross(right, direction);
+    using glm::mat4;
+    using glm::vec3;
 
-    glm::mat4 model = glm::mat4(1.f); 
-    glm::mat4 proj = glm::perspective(glm::radians(fov/2), (float)width / height, .1f, 10000.f);
-    glm::mat4 view = glm::lookAt(position, position + direction, up);
-    mvp = proj * view * model;
-}
+    const float cv = cos(vertAngle);
+    const float sv = sin(vertAngle);
+    const float ch = cos(horzAngle);
+    const float sh = sin(horzAngle);
 
-void drawText(Text *text, double frametime)
-{
-    text->clear();
-    text->printf("frame: %lfs, fps: %lf", frametime, 1.0 / frametime);
-    text->printf("w: %d, h: %d", width, height);
-    text->printf("fov: %f, h: %f, v: %f", fov, glm::degrees(horzAngle), glm::degrees(vertAngle));
-    text->printf("x: %f, y: %f, z: %f, ", position.x, position.y, position.z);
-    text->draw();
+    direction = vec3(cv * sh, sv, cv * ch);
+    right     = vec3(sin(horzAngle - M_PI/2.f), 0, cos(horzAngle - M_PI/2.f));
+    up        = glm::cross(right, direction);
+
+    const mat4 I = mat4(1.f);
+    const mat4 T = I; 
+    const mat4 S = I;
+    const mat4 R = glm::rotate(I, glm::radians(0.f), up);
+    const mat4 SRT = T * S * R;
+    const mat4 M = SRT;
+    const mat4 P = glm::perspective(glm::radians(fov/2), (float)width / height, .1f, 10000.f);
+    const mat4 V = glm::lookAt(position, position + direction, up);
+    const mat4 MVP = P * V * M;
+
+    mvp = MVP;
 }
 
 void initialize()

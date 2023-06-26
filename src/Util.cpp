@@ -25,6 +25,11 @@ double Stopwatch::stop()
     return (double)this->counter / 1.0e9;
 }
 
+double Stopwatch::elapsed()
+{
+    return (now_ns() - this->counter) / 1.0e9;
+}
+
 [[noreturn]] void die(const char *format, ...)
 {
     va_list args;

@@ -64,13 +64,18 @@ void print(const BoundsPyramid *pyr)
     printf("Size: %d\n", pyr->size);
     printf("Levels: %d\n", pyr->levels);
 
-    /*
-    size_t m = pyr->size 
-    while (size > 0)
+    size_t m = pyr->size * pyr->size * sizeof(float);
+    size_t s = pyr->size / 2;
+    while (s > 0)
     {
-        m += 2 *
+        m += 2 * s * s * sizeof(float);
+        s /= 2;
+    }
 
-    */
+    S("Memory: ");
+    printsize(m);
+    C('\n');
+
     /*
     for (int i = 0; i < pyr->levels; ++i)
     {

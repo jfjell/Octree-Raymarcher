@@ -61,4 +61,17 @@ struct OctreeCubemapDrawer
     void draw(const glm::mat4 MVP);
 };
 
+struct ParallaxDrawer
+{
+    Mesh mesh;
+    unsigned vao, shader, tex;
+    int mvp, sampler, eye, wto;
+
+    ~ParallaxDrawer();
+
+    void loadTree(const Ocroot *root);
+    void loadGL(const char *t);
+    void draw(const glm::mat4 MVP, glm::vec3 position);
+};
+
 #endif
