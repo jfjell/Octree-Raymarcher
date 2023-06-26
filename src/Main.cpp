@@ -69,11 +69,13 @@ int main()
     initialize();
     initializeControls();
     Text text("C:/Windows/Fonts/arial.ttf", 18, width, height);
+    SW_STOP(sw);
 
     // Load mesh into openGL
+    SW_START(sw, "Uploading mesh to GPU");
     ocd.loadGL("textures/quad.png");
-
     SW_STOP(sw);
+
 
     double frametime = 0;
     while (running) 
