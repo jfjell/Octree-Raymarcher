@@ -102,7 +102,7 @@ const unsigned int quadIndices[6] = {
     0, 2, 1
 };
 
-void Mesh::cube(glm::vec3 t, glm::vec3 s)
+void Mesh::cubeface(glm::vec3 t, glm::vec3 s)
 {
     using glm::vec3;
 
@@ -116,4 +116,59 @@ void Mesh::cube(glm::vec3 t, glm::vec3 s)
     add(yQuadVertices, 12, y2, s, quadIndices, 6, quadUV, 8);
     add(zQuadVertices, 12, z1, s, quadIndices, 6, quadUV, 8);
     add(zQuadVertices, 12, z2, s, quadIndices, 6, quadUV, 8);
+}
+
+/*
+      4----5
+     /|   /|
+    6----7 |
+    | |  | |
+    | 0--|-1
+    |/   |/
+    2----3
+*/
+const float cubeVertices[8*3] = {
+    0., 0., 0., 
+    1., 0., 0., 
+    0., 0., 1., 
+    1., 0., 1., 
+    0., 1., 0., 
+    1., 1., 0., 
+    0., 1., 1., 
+    1., 1., 1., 
+};
+
+#define N (1.0 / 3.0) // Normalized value of (.5, .5, .5)
+
+const float cubeUV[8*3] = {
+    -N, -N, -N,
+    +N, -N, -N,
+    -N, -N, +N,
+    +N, -N, +N,
+    -N, +N, -N,
+    +N, +N, -N,
+    -N, +N, +N,
+    +N, +N, +N,
+};
+
+#undef N
+
+const unsigned int cubeIndices[6*6] = {
+    4, 0, 5,
+    0, 1, 5,
+    6, 2, 4,
+    2, 0, 4,
+    7, 3, 6,
+    3, 2, 6,
+    5, 1, 7,
+    1, 3, 7,
+    0, 2, 1,
+    2, 3, 1,
+    5, 7, 4,
+    7, 6, 4,
+};
+
+void Mesh::cubemap(glm::vec3 t, glm::vec3 s)
+{
+    add(cubeVertices, 8*3, t, s, cubeIndices, 6*6, cubeUV, 8*3);
 }

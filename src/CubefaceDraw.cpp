@@ -6,32 +6,26 @@
 #include "Draw.h"
 #include "Octree.h"
 
-using glm::vec3;
-
-static void cubeTree(const Ocroot *r, Octree t, vec3 pos, float size, Mesh *m)
+static void cubeTree(const Ocroot *r, Octree t, glm::vec3 pos, float size, Mesh *m)
 {
+    using glm::vec3;
+
     switch (t.type)
     {
         case EMPTY:
             return;
         case LEAF:
-
-            //printf("Leaf at %f,%f,%f, size %f!\n", pos.x, pos.y, pos.z, size);
-
-            m->cube(pos, vec3(size, size, size));
+            m->cubeface(pos, vec3(size, size, size));
             return;
         case TWIG:
         {
             float leafSize = size / (1 << TWIG_LEVELS);
             Octwig twig = r->twig[t.offset];
-
-            // printf("Twig at %f,%f,%f, value %016llx, each size %f!\n", pos.x, pos.y, pos.z, twig.leafmap[0], leafSize);
-
             for (int y = 0; y < TWIG_SIZE; ++y)
                 for (int z = 0; z < TWIG_SIZE; ++z)
                     for (int x = 0; x < TWIG_SIZE; ++x)
                         if (twig.leafmap[Octwig::word(x, y, z)] & (1 << Octwig::bit(x, y, z)))
-                            m->cube(pos + vec3(x, y, z) * leafSize, vec3(leafSize, leafSize, leafSize));
+                            m->cubeface(pos + vec3(x, y, z) * leafSize, vec3(leafSize, leafSize, leafSize));
             return;
         }
         case BRANCH:
@@ -47,20 +41,20 @@ static void cubeTree(const Ocroot *r, Octree t, vec3 pos, float size, Mesh *m)
     }
 }
 
-OctreeCubeDrawer::~OctreeCubeDrawer()
+OctreeCubefaceDrawer::~OctreeCubefaceDrawer()
 {
     glDeleteProgram(shader);
     glDeleteTextures(1, &tex);
     glDeleteVertexArrays(1, &vao);
 }
 
-void OctreeCubeDrawer::loadTree(const Ocroot *root)
+void OctreeCubefaceDrawer::loadTree(const Ocroot *root)
 {
     // Load the tree into a mesh
     cubeTree(root, root->tree[0], root->position, root->size, &this->mesh);
 }
 
-void OctreeCubeDrawer::loadGL(const char *texture)
+void OctreeCubefaceDrawer::loadGL(const char *texture)
 {
     vao = shader = tex = 0;
 
@@ -99,7 +93,7 @@ void OctreeCubeDrawer::loadGL(const char *texture)
     SDL_FreeSurface(vt);
 }
 
-void OctreeCubeDrawer::draw(const glm::mat4 MVP)
+void OctreeCubefaceDrawer::draw(const glm::mat4 MVP)
 {
     glBindVertexArray(vao);
     glUseProgram(shader);

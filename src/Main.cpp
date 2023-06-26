@@ -47,22 +47,25 @@ int main()
 
     // Height pyramid for world gen
     SW_START(sw, "Generating bounded pyramid");
-    BoundsPyramid pyramid(1 << 11, 16, 1.0 / (1 << 9), 0, 0, 16);
+    BoundsPyramid pyramid(1 << 11, 16, 1.0 / (1 << 10), 0, 0, 16);
     SW_STOP(sw);
-    // print(&pyramid);
+    print(&pyramid);
 
     // Tree
     SW_START(sw, "Generating octree");
     Ocroot root;
     grow(&root, vec3(0, 0, 0), 128, 9, &pyramid);
     SW_STOP(sw);
+
     print(&root);
 
     // Mesh
     SW_START(sw, "Generating mesh");
-    OctreeCubeDrawer ocd;
-    ocd.loadTree(&root); 
+    // OctreeCubefaceDrawer d;
+    OctreeCubemapDrawer d;
+    d.loadTree(&root); 
     SW_STOP(sw);
+    print(&d.mesh);
 
     // OpenGL, SDL, etc.
     SW_START(sw, "Initializing OpenGL and SDL");
@@ -73,9 +76,8 @@ int main()
 
     // Load mesh into openGL
     SW_START(sw, "Uploading mesh to GPU");
-    ocd.loadGL("textures/quad.png");
+    d.loadGL("textures/quad.png");
     SW_STOP(sw);
-
 
     double frametime = 0;
     while (running) 
@@ -89,7 +91,7 @@ int main()
         glClearColor(0.3, 0.3, 0.6, 1.);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        ocd.draw(mvp);
+        d.draw(mvp);
 
         drawText(&text, frametime);
 

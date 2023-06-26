@@ -27,23 +27,37 @@ struct Mesh
              glm::vec3 tv, glm::vec3 sv, 
              const unsigned *i, size_t ni, 
              const float *u, size_t nu);
-    void cube(glm::vec3 t, glm::vec3 s);
+    void cubeface(glm::vec3 t, glm::vec3 s);
+    void cubemap(glm::vec3 t, glm::vec3 s);
 
     void bind();
 };
 
 struct Ocroot;
 
-struct OctreeCubeDrawer
+struct OctreeCubefaceDrawer
 {
     Mesh mesh;
     unsigned vao, shader, tex;
     int mvp, sampler;
 
-    ~OctreeCubeDrawer();
+    ~OctreeCubefaceDrawer();
 
     void loadTree(const Ocroot *root);
     void loadGL(const char *texture);
+    void draw(const glm::mat4 MVP);
+};
+
+struct OctreeCubemapDrawer
+{
+    Mesh mesh;
+    unsigned vao, shader, tex;
+    int mvp, sampler;
+
+    ~OctreeCubemapDrawer();
+
+    void loadTree(const Ocroot *root);
+    void loadGL(const char *t);
     void draw(const glm::mat4 MVP);
 };
 

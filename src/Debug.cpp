@@ -1,12 +1,34 @@
 #include <stdio.h>
+#include <string>
+#include <iostream>
 #include "Debug.h"
 #include "Octree.h"
 #include "BoundsPyramid.h"
 #include "Draw.h"
 
-#define C putchar
+using std::string;
 
+#define C putchar
 #define S printf
+
+using namespace std;
+
+void printsize(size_t value)
+{
+    size_t K = 1024;
+    size_t M = K*K;
+    size_t G = K*K*K;
+
+    string s = "";
+    if (value > G)
+        cout << ((double)value / G) << "GB";
+    else if (value > M)
+        cout << ((double)value / M) << "MB";
+    else if (value > K)
+        cout << ((double)value / K) << "KB";
+    else
+        cout << value << "B";
+}
 
 static void B(int size)
 {
@@ -38,10 +60,18 @@ static void grid(float *g, int s)
 
 void print(const BoundsPyramid *pyr)
 {
-    printf("BoundsPyramid\n");
+    printf("[BoundsPyramid]\n");
     printf("Size: %d\n", pyr->size);
     printf("Levels: %d\n", pyr->levels);
 
+    /*
+    size_t m = pyr->size 
+    while (size > 0)
+    {
+        m += 2 *
+
+    */
+    /*
     for (int i = 0; i < pyr->levels; ++i)
     {
         int s = 1 << i;
@@ -55,9 +85,13 @@ void print(const BoundsPyramid *pyr)
 
     printf("Base:\n");
     grid(pyr->base, pyr->size);
+    */
+
+   (void)grid;
+    C('\n');
 }
 
-void printTree(const Ocroot *r, uint32_t t)
+static void printTree(const Ocroot *r, uint32_t t)
 {
     const char *tps[] = { "empty", "leaf", "branch", "twig" };
     Octype tp = (Octype)r->tree[t].type;
@@ -71,9 +105,10 @@ void printTree(const Ocroot *r, uint32_t t)
     }
 }
 
+
 void print(const Ocroot *root)
 {
-    printf("Ocroot\n");
+    printf("[Ocroot]\n");
     printf("Position: %f,%f,%f\n", root->position.x, root->position.y, root->position.z);
     printf("Size: %f\n", root->size);
     printf("Density: %f\n", root->density);
@@ -83,18 +118,41 @@ void print(const Ocroot *root)
 
     printf("Used %f%% of tree address space!\n", 100.f * (float)root->trees / (double)(uint32_t)~(3 << 30));
     printf("Used %f%% of twig address space!\n", 100.f * (float)root->twigs / (double)(uint32_t)~(3 << 30));
+    
+    S("Memory: ");
+    printsize(root->trees * sizeof(Octree) + root->twigs * sizeof(Octwig));
 
     // printTree(root, 0);
+    (void)printTree;
 
     C('\n');
 }
 
 void print(const Mesh *mesh)
 {
-    printf("Mesh\n");
+    printf("[Mesh]\n");
     printf("#Vertex coordinates: %llu\n", mesh->vtxcoords.size());
     printf("#UV coordinates: %llu\n", mesh->uvcoords.size());
     printf("#Indices: %llu\n", mesh->indices.size());
 
-    C('\n');
+    if (mesh->vtxcoords.size() / 3 > 0xffff)
+        printf("Note: does not fit in an unsigned short!\n");
+
+    if (mesh->vtxcoords.size() / 3 > 0xffffffff)
+        printf("Note: does not fit in an unsigned int!\n");
+
+    size_t vtxbytes = mesh->vtxcoords.size() * sizeof(mesh->vtxcoords[0]);
+    size_t uvbytes = mesh->uvcoords.size() * sizeof(mesh->uvcoords[0]);
+    size_t indexbytes = mesh->indices.size() * sizeof(mesh->indices[0]);
+    size_t sum = vtxbytes + uvbytes + indexbytes;
+    S("Memory: vertices + uv + indices = ");
+    printsize(vtxbytes);
+    S(" + ");
+    printsize(uvbytes);
+    S(" + ");
+    printsize(indexbytes);
+    S(" = ");
+    printsize(sum);
+
+    S("\n\n");
 }
