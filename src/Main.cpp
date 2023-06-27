@@ -44,7 +44,7 @@ int main()
 
     Stopwatch sw;
 
-    int depth = 9;
+    int depth = 10;
     // Height pyramid for world gen
     SW_START(sw, "Generating bounded pyramid");
     BoundsPyramid pyramid(1 << depth, 16, 1.0 / (1 << depth), 0, 0, 16);
@@ -80,14 +80,13 @@ int main()
     d.loadGL("textures/quad.png");
     SW_STOP(sw);
 
-    Stopwatch theoframe, realframe, textframe;
+    Stopwatch frame, textframe;
     textframe.start();
-    double real = 0, theo = 0;
+    double real = 0;
 
     while (running) 
     {
-        realframe.start();
-        theoframe.start();
+        frame.start();
 
         input.poll();
 
@@ -102,7 +101,7 @@ int main()
         if (textframe.elapsed() > 1. / 24)
         {
             text.clear();
-            text.printf("frame time: %lfs, theoretical fps: %lf, real fps: %lf", theo, 1.0 / theo, 1.0 / real);
+            text.printf("frame time: %lfms, fps: %lf", real * 1000, 1.0 / real);
             text.printf("w: %d, h: %d", width, height);
             text.printf("fov: %f, h: %f, v: %f", fov, glm::degrees(horzAngle), glm::degrees(vertAngle));
             text.printf("x: %f, y: %f, z: %f, ", position.x, position.y, position.z);
@@ -111,11 +110,9 @@ int main()
         }
         text.draw();
 
-        theo = theoframe.stop();
-
         SDL_GL_SwapWindow(window);
 
-        real = realframe.stop();
+        real = frame.stop();
     }
 
     text.~Text();
