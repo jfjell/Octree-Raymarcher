@@ -10,17 +10,26 @@
 
 using glm::vec3;
 
-unsigned Octwig::word(int x, int y, int z)
+unsigned Octwig::word(unsigned x, unsigned y, unsigned z)
 {
+    assert(x < TWIG_SIZE);
+    assert(y < TWIG_SIZE);
+    assert(z < TWIG_SIZE);
+    unsigned i = z / 2;
+    assert(i < TWIG_WORDS);
     (void)x;
     (void)y;
-    (void)z;
-    return 0;
+    return i;
 }
 
-unsigned Octwig::bit(int x, int y, int z)
+unsigned Octwig::bit(unsigned x, unsigned y, unsigned z)
 {
-    return x * 4 * 4 + y * 4 + z;
+    assert(x < TWIG_SIZE);
+    assert(y < TWIG_SIZE);
+    assert(z < TWIG_SIZE);
+    unsigned i = (z / 2) * 16 + y * 4 + x;
+    assert(i < TWIG_BITS);
+    return i;
 }
 
 Octree::Octree(uint32_t type, uint32_t offset)

@@ -29,13 +29,15 @@ static_assert(sizeof(Octree) == sizeof(uint32_t));
 
 #define TWIG_LEVELS 2
 #define TWIG_SIZE 4
+#define TWIG_BITS 32 // Bits per word
+#define TWIG_WORDS 2
 
 struct Octwig
 {
-    uint64_t leafmap[1];
+    uint32_t leafmap[TWIG_WORDS];
 
-    static unsigned word(int x, int y, int z);
-    static unsigned bit(int x, int y, int z);
+    static unsigned word(unsigned x, unsigned y, unsigned z);
+    static unsigned bit(unsigned x, unsigned y, unsigned z);
 };
 
 static_assert(sizeof(Octwig) == (1 << (TWIG_LEVELS * 3)) / 8);
