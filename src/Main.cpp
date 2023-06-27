@@ -62,8 +62,8 @@ int main()
     // Mesh
     SW_START(sw, "Generating mesh");
     // OctreeCubefaceDrawer d;
-    OctreeCubemapDrawer d;
-    // ParallaxDrawer d;
+    // OctreeCubemapDrawer d;
+    ParallaxDrawer d;
     d.loadTree(&root); 
     SW_STOP(sw);
     print(&d.mesh);
@@ -96,8 +96,8 @@ int main()
         glClearColor(0.3, 0.3, 0.6, 1.);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        d.draw(mvp);
-        // d.draw(mvp, position);
+        // d.draw(mvp);
+        d.draw(mvp, position);
 
         if (textframe.elapsed() > 1. / 24)
         {

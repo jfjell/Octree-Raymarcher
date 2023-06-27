@@ -28,7 +28,7 @@ layout(std430, binding = 3) buffer ssboTwig {
 out vec4 color;
  
 #define MAX_STEPS 100
-#define MAX_DIST  100
+//#define MAX_DIST  100
 #define SURF_DIST 1e-3
 
 float cubeSDF(vec3 point, vec3 center, float radius) {
@@ -36,6 +36,7 @@ float cubeSDF(vec3 point, vec3 center, float radius) {
     return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
 }
 
+/*
 float minDist(vec3 p) {
     return cubeSDF(p, vec3(0, 1, 0), 0.3);
 }
@@ -77,6 +78,7 @@ void old() {
     if (twig.length() > 0)
         color.rgb += vec3(0.1, 0.1, 0.1);
 }
+*/
 
 #define TREE_EPS 1.0 / (1 << root.depth)
 
@@ -101,6 +103,7 @@ uint branch(bool xg, bool yg, bool zg) {
     return int(xg) + int(yg) * 2 + int(zg) * 4;
 }
 
+/*
 #define MAXSTEPS 100
 
 float walk(vec3 point, vec3 direction, out bool found) {
@@ -135,19 +138,21 @@ float walk(vec3 point, vec3 direction, out bool found) {
             
             t = tree[next];
             size = halfsize;
-        } else /* type(t) == TWIG */ {
-            found = true;
+        } else /* type(t) == TWIG */ //{
+            /*found = true;
             return s;
         }
     }
     found = false;
     return s;
 }
+*/
 
 float rootSDF(vec3 point) {
     return cubeSDF(point, root.pos + root.size * 0.5, root.size * 0.5);
 }
 
+/*
 float treeSDF(vec3 p) {
     if (rootSDF(p) > 0.0) return rootSDF(p);
 
@@ -168,6 +173,7 @@ float treeSDF(vec3 p) {
         halfsize *= 0.5;
     }
 }
+*/
 
 struct TreeBranch {
     vec3 minpos;
@@ -199,6 +205,7 @@ bool enclosingTree(vec3 p, out TreeBranch intersect) {
     return true;
 }
 
+/*
 uint pointType(vec3 p) {
     vec3  corner   = root.pos;
     float halfsize = root.size * 0.5;
@@ -276,6 +283,7 @@ float rm2(vec3 ro, vec3 rd) {
 
     return dist;
 }
+*/
 
 /*
 float cubeInnerDistance(vec3 ro, vec3 rd, vec3 minpos, float size) {
@@ -309,14 +317,39 @@ float cubeInnerDistance2(vec3 ro, vec3 rd, vec3 minpos, float size) {
 }
 */
 
-#define MAXDIST 65535
+#define TWIG_SIZE 4
+#define TWIG_LEVELS 2
 
-bool intersectTwig(uint map) {
-    return false;
+uint TreeOffset(uint t) {
+    return offset(t);
+}
+
+uint TwigOffset(uint t) {
+    return offset(t) * 2;
+}
+
+uint word(uint x, uint y, uint z) {
+    return z / 2;
+}
+
+uint bit(uint x, uint y, uint z) {
+    return (z / 2) * 16 + y * 4 + x;
+}
+
+#define MAX_DIST 65535
+
+bool intersectsTwig(vec3 p, uint index, vec3 minpos, float leafsize) {
+    vec3 i = p - minpos;
+    uint x = uint(i.x / leafsize);
+    uint y = uint(i.y / leafsize);
+    uint z = uint(i.z / leafsize);
+    uint w = word(x, y, z);
+    uint b = bit(x, y, z);
+    return (twig[index + w] & (1 << b)) != 0;
 }
 
 float raymarch(vec3 ro, vec3 rd) {
-    float eps = root.size / pow(2, root.depth);
+    float eps = root.size * 0.5 / pow(2, root.depth);
     float s = 0.0;
 
     for ( ; ; ) {
@@ -333,11 +366,14 @@ float raymarch(vec3 ro, vec3 rd) {
                 // Found a match
                 break;
             } else if (species == TWIG) {
-                break;
+                float leafsize = t.size / pow(2, TWIG_LEVELS);
+                if (intersectsTwig(p, TwigOffset(tree[t.index]), t.minpos, leafsize))
+                    break;
+                s += eps * 0.5;
             }
         } else {
             // Out of the root!
-            return MAXDIST;
+            return MAX_DIST;
         }
     }
     return s;
@@ -350,8 +386,10 @@ void main(void) {
     vec3 init = rootSDF(ro) < 0.0 ? ro : hitpos + eps * rd;
     float dist = raymarch(init, rd);
 
-    if (dist < MAXDIST) {
-        color = vec4(dist, 0.5, 0.25, 1);
+    if (dist < MAX_DIST) {
+        vec3 p = init + rd * dist;
+        vec3 relative = (p - root.pos) / root.size;
+        color = texture(sampler, relative.xz).rgba;
     } else {
         discard;
     }
