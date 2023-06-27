@@ -208,14 +208,39 @@ void deinitialize()
 
 void initializeControls()
 {
-    input.bind(SDL_QUIT, [&]() { running = false; });
-    input.bindKey('w', [&]() { position += direction * speed; });
-    input.bindKey('s', [&]() { position -= direction * speed; });
-    input.bindKey('a', [&]() { position -= right * speed; });
-    input.bindKey('d', [&]() { position += right * speed; });
-    input.bindKey(SDLK_SPACE, [&]() { position += glm::vec3(0.f, 1.f, 0.f) * speed; });
-    input.bindKey(SDLK_LSHIFT, [&]() { position -= glm::vec3(0.f, 1.f, 0.f) * speed; });
-    input.bindKey(SDLK_ESCAPE, [&]() { running = false; });
+    input.bind(SDL_QUIT, [&]() { 
+        running = false; 
+    });
+    input.bindKey('w', [&]() { 
+        position += direction * speed; 
+    });
+    input.bindKey('s', [&]() { 
+        position -= direction * speed; 
+    });
+    input.bindKey('a', [&]() { 
+        position -= right * speed; 
+    });
+    input.bindKey('d', [&]() { 
+        position += right * speed; 
+    });
+    input.bindKey(SDLK_SPACE, [&]() { 
+        position += glm::vec3(0.f, 1.f, 0.f) * speed; 
+    });
+    input.bindKey(SDLK_LSHIFT, [&]() { 
+        position -= glm::vec3(0.f, 1.f, 0.f) * speed; 
+    });
+    input.bindKey(SDLK_ESCAPE, [&]() {
+        running = false; 
+    });
+    input.bindKey(SDLK_TAB, [&]() { 
+        SDL_ShowCursor(SDL_ENABLE);
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+    });
+    input.bind(SDL_MOUSEBUTTONDOWN, [&](SDL_Event&e) {
+        if (e.button.button != SDL_BUTTON_LEFT) return;
+        SDL_ShowCursor(SDL_DISABLE);
+        SDL_SetRelativeMouseMode(SDL_TRUE);
+    });
     input.bind(SDL_MOUSEMOTION, [&](SDL_Event& e) {
         horzAngle -= (float)e.motion.xrel * sensitivity;
         vertAngle -= (float)e.motion.yrel * sensitivity;

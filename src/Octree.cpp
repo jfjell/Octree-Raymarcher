@@ -23,9 +23,26 @@ unsigned Octwig::bit(int x, int y, int z)
     return x * 4 * 4 + y * 4 + z;
 }
 
+Octree::Octree(uint32_t type, uint32_t offset)
+{
+    assert(type <= 3);
+    assert(offset < (uint32_t)1 << 31);
+    value = (type << 30) | (offset & ~((uint32_t)3 << 30));
+}
+
+uint64_t Octree::offset()
+{
+    return value & ~((uint32_t)3 << 30);
+}
+
+uint32_t Octree::type()
+{
+    return value >> 30;
+}
+
 unsigned Octree::branch(bool xg, bool yg, bool zg)
 {
-    return (zg << 2) | (yg << 1) | xg;
+    return (int)xg + (int)yg * 2 + (int)zg * 4;
 }
 
 void Octree::cut(unsigned i, bool *xg, bool *yg, bool *zg)
@@ -34,6 +51,8 @@ void Octree::cut(unsigned i, bool *xg, bool *yg, bool *zg)
     *yg = i & 2;
     *zg = i & 4;
 }
+
+#define INVALID_OFFSET (~((uint32_t)3 << 30))
 
 void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsPyramid *pyr)
 {
@@ -63,32 +82,29 @@ void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsP
 
     while (!q.empty())
     {
-        Ocentry e = q.front();
+        Ocentry t = q.front();
         q.pop();
 
-        vec3 p = (e.pos - position) / size;
-        float low = pyr->min(p.x, p.z, e.depth);
-        float high = pyr->max(p.x, p.z, e.depth);
+        vec3 p = (t.pos - position) / size;
+        float low = pyr->min(p.x, p.z, t.depth);
+        float high = pyr->max(p.x, p.z, t.depth);
 
-        if(high < e.pos.y)
+        if(high < t.pos.y)
         {
             // Maximum height in this quadrant is lower => empty
-            root->tree[e.offset].type   = EMPTY;
-            root->tree[e.offset].offset = ~(uint32_t)0;
+            root->tree[t.offset] = Octree(EMPTY, INVALID_OFFSET);
         }
-        else if (low > e.pos.y + e.size)
+        else if (low > t.pos.y + t.size)
         {
             // Minimum height in this quadrant is higher => leaf/solid
-            root->tree[e.offset].type   = LEAF;
-            root->tree[e.offset].offset = ~(uint32_t)0;
+            root->tree[t.offset] = Octree(LEAF, INVALID_OFFSET);
         }
-        else if (e.depth == root->depth - TWIG_LEVELS)
+        else if (t.depth == root->depth - TWIG_LEVELS)
         {
-            assert(high >= e.pos.y && low <= e.pos.y + e.size);
+            assert(high >= t.pos.y && low <= t.pos.y + t.size);
 
-            // printf("\nMaking a twig where depth=%d, low=%f, high=%f, xyz=%f,%f,%f\n", e.depth, low, high, e.pos.x, e.pos.y, e.pos.z);
             // Reached maximum depth => twig/brick
-            float twigLeafSize = e.size / (1 << TWIG_LEVELS);
+            float twigLeafSize = t.size / (1 << TWIG_LEVELS);
             Octwig twig;
             for (int y = 0; y < TWIG_SIZE; ++y)
             {
@@ -98,24 +114,17 @@ void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsP
                     {
                         float dx = ((float)x * twigLeafSize) / size;
                         float dz = ((float)z * twigLeafSize) / size;
-                        float l = pyr->min(p.x + dx, p.z + dz, e.depth + TWIG_LEVELS);
-                        float h = pyr->max(p.x + dx, p.z + dz, e.depth + TWIG_LEVELS);
+                        float l = pyr->min(p.x + dx, p.z + dz, t.depth + TWIG_LEVELS);
+                        float h = pyr->max(p.x + dx, p.z + dz, t.depth + TWIG_LEVELS);
 
-                        // printf("\txyz=%f,%f, low=%f, high=%f\n", e.pos.x + (float)x * twigLeafSize, e.pos.z + (float)z * twigLeafSize, l, h);
+                        (void)l;
 
-                        /*
-                        // Same logic as above
-                        if (h < e.pos.y + y * twigLeafSize) // Empty
-                            twig.leafmap[Octwig::word(x, y, z)] &= ~(1 << Octwig::bit(x, y, z));
-                        if (l > e.pos.y + y * twigLeafSize) // Leaf
-                            twig.leafmap[Octwig::word(x, y, z)] |=  (1 << Octwig::bit(x, y, z));
-                        */
-                       if (h >= e.pos.y + y *twigLeafSize) // Leaf
+                        // Similar logic to above
+                       if (h >= t.pos.y + y *twigLeafSize) // Leaf
                             twig.leafmap[Octwig::word(x, y, z)] |=  (1 << Octwig::bit(x, y, z));
                         else // Empty
                             twig.leafmap[Octwig::word(x, y, z)] &= ~(1 << Octwig::bit(x, y, z));
 
-                        (void)l;
                     }
                 }
             }
@@ -123,16 +132,13 @@ void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsP
                 root->twig = (Octwig *)realloc(root->twig, (allocatedTwigs *= 2) * sizeof(Octwig));
 
             uint32_t offset = root->twigs++;
-            root->tree[e.offset].type   = TWIG;
-            root->tree[e.offset].offset = offset;
-            root->twig[offset]          = twig;
-
-            // printf("%016llx\n", root->twig[offset].leafmap[0]);
+            root->tree[t.offset] = Octree(TWIG, offset);
+            root->twig[offset] = twig;
         }
         else
         {
             // Must be a branch => make 8 children and add them to the queue
-            assert(high >= e.pos.y && low <= e.pos.y + e.size);
+            assert(high >= t.pos.y && low <= t.pos.y + t.size);
 
             if (root->trees >= allocatedTrees + 8)
                 root->tree = (Octree *)realloc(root->tree, (allocatedTrees *= 2) * sizeof(Octree));
@@ -143,12 +149,11 @@ void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsP
             {
                 bool xg, yg, zg;
                 Octree::cut(i, &xg, &yg, &zg);
-                q.push({ e.pos + vec3(xg, yg, zg) * (e.size / 2), e.size / 2, e.depth + 1, offset + i });
+                q.push({ t.pos + vec3(xg, yg, zg) * (t.size / 2), t.size / 2, t.depth + 1, offset + i });
             }
 
             root->trees += 8;
-            root->tree[e.offset].type   = BRANCH;
-            root->tree[e.offset].offset = offset;
+            root->tree[t.offset] = Octree(BRANCH, offset);
         }
     }
 

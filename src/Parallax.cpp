@@ -9,6 +9,8 @@
 
 ParallaxDrawer::~ParallaxDrawer()
 {
+    glDeleteBuffers(1, &ssboTree);
+    glDeleteBuffers(1, &ssboTwig);
     glDeleteProgram(shader);
     glDeleteTextures(1, &tex);
     glDeleteVertexArrays(1, &vao);
@@ -16,11 +18,8 @@ ParallaxDrawer::~ParallaxDrawer()
 
 void ParallaxDrawer::loadTree(const Ocroot *root)
 {
-    using glm::vec3;
-    // Load the tree into a mesh
-    (void)root;
-    vec3 pos = vec3(1.f, 1.f, 1.f) * 0.f;
-    mesh.cubeface(pos, vec3(1, 1, 1));
+    mesh.cubeface(root->position, glm::vec3(1., 1., 1.) * root->size);
+    this->root = root;
 }
 
 void ParallaxDrawer::loadGL(const char *texture)
@@ -37,15 +36,43 @@ void ParallaxDrawer::loadGL(const char *texture)
     Shader::compileAttach("shaders/Parallax.Fragment.glsl", GL_FRAGMENT_SHADER, shader);
     Shader::link(shader);
 
+    glUseProgram(shader);
+
     this->mvp = glGetUniformLocation(shader, "mvp");
     assert(mvp != -1);
-    this->sampler = glGetUniformLocation(shader, "sampler");
-    assert(sampler != -1);
-    this->eye = glGetUniformLocation(shader, "cameraOrigin");
+
+    this->eye = glGetUniformLocation(shader, "eye");
     assert(eye != -1);
+
+    this->sampler = glGetUniformLocation(shader, "sampler");
+    // assert(sampler != -1);
+    if (sampler != -1) glUniform1i(sampler, 0);
+
+    int pos   = glGetUniformLocation(shader, "root.pos");
+    int size  = glGetUniformLocation(shader, "root.size");
+    int depth = glGetUniformLocation(shader, "root.depth");
+    int trees = glGetUniformLocation(shader, "root.trees");
+    int twigs = glGetUniformLocation(shader, "root.twigs");
+    if (pos != -1) glUniform3fv(pos, 1, glm::value_ptr(root->position));
+    if (size != -1) glUniform1f(size, root->size);
+    if (depth != -1) glUniform1ui(depth, root->depth);
+    if (trees != -1) glUniform1ui(trees, root->trees);
+    if (twigs != -1) glUniform1ui(twigs, root->twigs);
+
+    glUseProgram(0);
 
     // Vertices
     mesh.bind();
+
+    glGenBuffers(1, &ssboTree);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboTree);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, root->trees * sizeof(Octree), root->tree, GL_STATIC_DRAW); 
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboTree);
+
+    glGenBuffers(1, &ssboTwig);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboTwig);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, root->twigs * sizeof(Octwig), root->twig, GL_STATIC_DRAW); 
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssboTwig);
 
     // Texture
     glGenTextures(1, &this->tex);
@@ -61,6 +88,7 @@ void ParallaxDrawer::loadGL(const char *texture)
 
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
     SDL_FreeSurface(vt);
 }
@@ -71,7 +99,6 @@ void ParallaxDrawer::draw(const glm::mat4 MVP, glm::vec3 position)
     glUseProgram(shader);
 
     glUniformMatrix4fv(mvp, 1, GL_FALSE, glm::value_ptr(MVP));
-    glUniform1i(sampler, 0);
     glUniform3fv(eye, 1, glm::value_ptr(position));
 
     glActiveTexture(GL_TEXTURE0);

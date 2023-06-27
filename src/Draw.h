@@ -64,7 +64,8 @@ struct OctreeCubemapDrawer
 struct ParallaxDrawer
 {
     Mesh mesh;
-    unsigned vao, shader, tex;
+    const Ocroot *root;
+    unsigned vao, shader, tex, ssboTree, ssboTwig;
     int mvp, sampler, eye, wto;
 
     ~ParallaxDrawer();

@@ -99,14 +99,14 @@ void print(const BoundsPyramid *pyr)
 static void printTree(const Ocroot *r, uint32_t t)
 {
     const char *tps[] = { "empty", "leaf", "branch", "twig" };
-    Octype tp = (Octype)r->tree[t].type;
-    printf("%08x:[%s:%08x]\n", t, tps[tp], r->tree[t].offset);
+    Octype tp = (Octype)r->tree[t].type();
+    printf("%08x:[%s:%08x]\n", t, tps[tp], (uint32_t)r->tree[t].offset());
     if (tp == TWIG)
-        printf("\t%016llx\n", r->twig[r->tree[t].offset].leafmap[0]);
+        printf("\t%016llx\n", r->twig[r->tree[t].offset()].leafmap[0]);
     if (tp == BRANCH)
     {
         for (int i = 0; i < 8; ++i)
-            printTree(r, r->tree[t].offset + i);
+            printTree(r, r->tree[t].offset() + i);
     }
 }
 

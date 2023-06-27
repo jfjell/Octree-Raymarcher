@@ -10,7 +10,7 @@ static void cubeTree(const Ocroot *r, Octree t, glm::vec3 pos, float size, Mesh 
 {
     using glm::vec3;
 
-    switch (t.type)
+    switch (t.type())
     {
         case EMPTY:
             return;
@@ -20,7 +20,7 @@ static void cubeTree(const Ocroot *r, Octree t, glm::vec3 pos, float size, Mesh 
         case TWIG:
         {
             float leafSize = size / (1 << TWIG_LEVELS);
-            Octwig twig = r->twig[t.offset];
+            Octwig twig = r->twig[t.offset()];
             for (int y = 0; y < TWIG_SIZE; ++y)
                 for (int z = 0; z < TWIG_SIZE; ++z)
                     for (int x = 0; x < TWIG_SIZE; ++x)
@@ -34,7 +34,7 @@ static void cubeTree(const Ocroot *r, Octree t, glm::vec3 pos, float size, Mesh 
             {
                 bool xg, yg, zg;
                 Octree::cut(i, &xg, &yg, &zg);
-                cubeTree(r, r->tree[t.offset + i], pos + vec3(xg, yg, zg) * (size / 2), size / 2, m);
+                cubeTree(r, r->tree[t.offset() + i], pos + vec3(xg, yg, zg) * (size / 2), size / 2, m);
             }
             return;
         }

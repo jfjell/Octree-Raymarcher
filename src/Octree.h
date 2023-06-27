@@ -15,8 +15,11 @@ enum Octype
 
 struct Octree
 {
-    uint32_t type   : 2;
-    uint32_t offset : 30;
+    uint32_t value;
+
+    Octree(uint32_t type, uint32_t offset);
+    uint64_t offset();
+    uint32_t type();
 
     static unsigned branch(bool xg, bool yg, bool zg);
     static void cut(unsigned i, bool *xg, bool *yg, bool *zg);
