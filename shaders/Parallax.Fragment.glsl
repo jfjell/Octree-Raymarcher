@@ -1,11 +1,17 @@
 #version 430 core
- 
-uniform vec3 eye;
-uniform sampler2D sampler;
 
-in vec3 hitpos;
-in vec2 uv;
-uniform mat4x4 mvp;
+#define EMPTY  0
+#define LEAF   1
+#define BRANCH 2
+#define TWIG   3
+
+#define TWIG_SIZE 4
+#define TWIG_LEVELS 2
+#define TWIG_WORDS 2
+
+#define MAX_DIST 256.0
+
+const float EPS = pow(2.0, -12.0);
 
 struct Root {
     vec3  pos;
@@ -15,170 +21,150 @@ struct Root {
     uint  twigs;
 };
 
+struct Tree {
+    vec3  pos;
+    float size;
+    uint  index;
+};
+
+layout(location = 0) in vec3 hitpos;
+layout(location = 1) in vec2 uv;
+
+uniform sampler2D sampler;
+uniform vec3 eye;
+uniform mat4x4 mvp;
 uniform Root root;
 
-layout(std430, binding = 2) buffer ssboTree {
-    uint tree[];
+layout(std430, binding = 2) restrict readonly buffer ssboTree {
+    uint Tree_SSBO[];
 };
 
-layout(std430, binding = 3) buffer ssboTwig {
-    uint twig[];
+layout(std430, binding = 3) restrict readonly buffer ssboTwig {
+    uint Twig_SSBO[];
 };
 
-float cubeSDF(vec3 point, vec3 center, float radius) {
-    vec3 q = abs(point - center) - vec3(radius); 
-    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
-}
-
-#define INF (1.0 / 0.0)
-
-vec3 cubeInnerNormal(vec3 p, vec3 minpos, vec3 maxpos) {
-    vec3 deltamin = minpos - p;
-    vec3 deltamax = maxpos - p;
-    vec3 delta = length(deltamin) < length(deltamax) ? deltamin : deltamax;
-    vec3 norm = vec3(INF, INF, INF);
-    for (int i = 0; i < 3; ++i) {
-        if (abs(delta[i]) > length(norm)) continue;
-        norm = vec3(0, 0, 0);
-        norm[i] = delta[i];
-    }
-    vec3 midpos = minpos + (maxpos - minpos) * 0.5;
-    float size = maxpos.x - minpos.x;
-    if (cubeSDF(p, midpos, size * 0.5) <= 0.0) norm = -norm;
-    return normalize(norm);
-}
-
-#define EMPTY  0
-#define LEAF   1
-#define BRANCH 2
-#define TWIG   3
-
-uint type(uint t) {
+uint Tree_type(uint t) {
     return t >> 30;
 }
 
-uint offset(uint t) {
+uint Tree_offset(uint t) {
     return t & ~(3 << 30);
 }
 
-uint branch(bool xg, bool yg, bool zg) {
+uint Tree_branch(bool xg, bool yg, bool zg) {
     return int(xg) + int(yg) * 2 + int(zg) * 4;
 }
 
-float rootSDF(vec3 point) {
-    return cubeSDF(point, root.pos + root.size * 0.5, root.size * 0.5);
+uint Twig_offset(uint t) {
+    return Tree_offset(t) * TWIG_WORDS;
 }
 
-struct TreeBranch {
-    vec3 minpos;
-    float size;
-    uint index;
-};
-
-bool enclosingTree(vec3 p, out TreeBranch intersect) {
-    if (rootSDF(p) > 0.0) 
-        return false;
-
-    TreeBranch t = TreeBranch(root.pos, root.size, 0);
-    for ( ; ; ) {
-        uint species = type(tree[t.index]);
-        if (species == EMPTY || species == LEAF || species == TWIG) 
-            break;
-
-        float halfsize = t.size * 0.5;
-        vec3 c = t.minpos + halfsize;
-        bool xg = p.x > c.x;
-        bool yg = p.y > c.y;
-        bool zg = p.z > c.z;
-        uint subtree = branch(xg, yg, zg);
-        vec3 nextpos = t.minpos + (vec3(float(xg), float(yg), float(zg)) * halfsize);
-        t = TreeBranch(nextpos, halfsize, offset(tree[t.index]) + subtree);
-    }
-
-    intersect = t;
-    return true;
-}
-
-#define TWIG_SIZE 4
-#define TWIG_LEVELS 2
-
-uint TreeOffset(uint t) {
-    return offset(t);
-}
-
-uint TwigOffset(uint t) {
-    return offset(t) * 2;
-}
-
-uint word(uint x, uint y, uint z) {
+uint Twig_word(uint x, uint y, uint z) {
     return z / 2;
 }
 
-uint bit(uint x, uint y, uint z) {
+uint Twig_bit(uint x, uint y, uint z) {
     return (z / 2) * 16 + y * 4 + x;
 }
 
-#define MAX_DIST 65535
-
-bool intersectsTwig(vec3 p, uint index, vec3 minpos, float leafsize, vec3 norm) {
-    vec3 i = p - minpos;
-    uint x = uint(i.x / leafsize);
-    uint y = uint(i.y / leafsize);
-    uint z = uint(i.z / leafsize);
-    uint w = word(x, y, z);
-    uint b = bit(x, y, z);
-    bool t = (twig[index + w] & (1 << b)) != 0;
-    norm = cubeInnerNormal(p, minpos + vec3(x, y, z) * leafsize, minpos + (vec3(x, y, z) + 1) * leafsize);
-    return t;
+bool isInsideCube(vec3 p, vec3 cmin, vec3 cmax) {
+    bvec3 geq = greaterThanEqual(p, cmin);
+    bvec3 leq = greaterThanEqual(cmax, p);
+    return all(geq) && all(leq);
 }
 
-float raymarch(vec3 ro, vec3 rd, out vec3 norm) {
-    float eps = root.size / pow(2.0, float(root.depth) + TWIG_LEVELS);
-    float s = 0.0;
+float cubeEscapeDistance(vec3 a, vec3 b, vec3 cmin, vec3 cmax) {
+    vec3 tmin = (cmin - a) * (1.0 / b);
+    vec3 tmax = (cmax - a) * (1.0 / b);
+    vec3 t = max(tmin, tmax);
+    return min(t.x, min(t.y, t.z));
+}
 
+Tree enclosingTree(vec3 p) {
+    Tree tree = Tree(root.pos, root.size, 0);
     for ( ; ; ) {
-        vec3 p = ro + rd * s;
-        TreeBranch t;
-        if (enclosingTree(p, t)) {
-            float edge = -cubeSDF(p, t.minpos + t.size * 0.5, t.size * 0.5);
+        uint value = Tree_SSBO[tree.index];
+        uint species = Tree_type(value);
+        if (species != BRANCH) break;
+        float halfsize = tree.size * 0.5;
+        vec3 mid = tree.pos + halfsize;
+        bvec3 geq = greaterThanEqual(p, mid);
+        uint branch = Tree_branch(geq.x, geq.y, geq.z);
+        vec3 nextpos = tree.pos + vec3(geq) * halfsize;
+        tree = Tree(nextpos, halfsize, Tree_offset(value) + branch);
+    }
+    return tree;
+}
 
-            uint species = type(tree[t.index]);
-            if (species == EMPTY) {
-                // Advance to the next subtree, or out of the tree
-                s += edge + eps;
-            } else if (species == LEAF) {
-                // Found a match
-                norm = cubeInnerNormal(p, t.minpos, t.minpos + t.size);
-                return s;
-            } else if (species == TWIG) {
-                float leafsize = t.size / pow(2, TWIG_LEVELS);
-                vec3 n;
-                if (intersectsTwig(p, TwigOffset(tree[t.index]), t.minpos, leafsize, n)) {
-                    norm = n;
-                    return s;
-                }
-                s += eps;
-            }
+bool raymarchTwig(uint index, vec3 a, vec3 b, vec3 cmin, float size, float leafsize, out float s) {
+    float halfsize = size * 0.5;
+    float t = 0.0;
+    for ( ; ; ) {
+        vec3 p = a + b * t;
+        if (!isInsideCube(p, cmin, cmin + size)) break;
+
+        ivec3 off = ivec3((vec3(p - cmin) * (1.0 / leafsize))); // Integer offset
+        uint word = Twig_word(off.x, off.y, off.z);
+        uint bit  = Twig_bit(off.x, off.y, off.z);
+
+        if ((Twig_SSBO[index + word] & (1 << bit)) != 0) {
+            // Hit!
+            s = t;
+            return true;
         } else {
-            // Out of the root!
-            return MAX_DIST;
+            // Missed, go next
+            vec3 leafmin = cmin + vec3(off) * leafsize;
+            vec3 leafmax = leafmin + leafsize;
+            float stepsize = cubeEscapeDistance(p, b, leafmin, leafmax);
+            t += stepsize + EPS;
         }
     }
+    return false;
+}
+
+float raymarchTree(vec3 a, vec3 b) {
+    float t = 0.0;
+
+    for ( ; ; ) {
+        vec3 p = a + b * t;
+        if (!isInsideCube(p, root.pos, root.pos + root.size)) break;
+
+        Tree tree = enclosingTree(p);
+        uint value = Tree_SSBO[tree.index];
+        uint type = Tree_type(value);
+        if (type == EMPTY) {
+            // Advance to the next subtree, or out of the tree
+            float escape = cubeEscapeDistance(p, b, tree.pos, tree.pos + tree.size);
+            t += escape + EPS;
+        } else if (type == LEAF) {
+            // Found a match
+            return t;
+        } else if (type == TWIG) {
+            float leafsize = tree.size / pow(2.0, float(TWIG_LEVELS));
+            float s = 0.0;
+            //if (intersectsTwig(p, Twig_offset(Tree_SSBO[t.index]), t.minpos, leafsize)) {
+            if (raymarchTwig(Twig_offset(value), p, b, tree.pos, tree.size, leafsize, s)) {
+                return t + s;
+            } else {
+                float escape = cubeEscapeDistance(p, b, tree.pos, tree.pos + tree.size);
+                t += escape + EPS;
+            }
+        }
+    }
+    return MAX_DIST;
 }
 
 void main(void) {
-    float eps = root.size / pow(2, root.depth);
-    vec3 ro = eye;
-    vec3 rd = normalize(hitpos - ro);
-    vec3 init = rootSDF(ro) < 0.0 ? ro : hitpos + eps * rd;
-    vec3 normal;
-    float dist = raymarch(init, rd, normal);
+    vec3 beta = normalize(hitpos - eye);
+    vec3 alpha = isInsideCube(eye, root.pos, root.pos + root.size) ? eye : hitpos + beta * EPS; 
+    float sigma = raymarchTree(alpha, beta);
 
-    if (dist < MAX_DIST) {
-        vec3 p = init + rd * dist;
-        vec3 relative = (p - root.pos) / root.size;
-        vec3 tex = texture(sampler, relative.xz).rgb;
-        gl_FragColor = vec4(tex + normal, 1);
+    if (sigma < MAX_DIST) {
+        vec3 point = alpha + beta * sigma;
+        vec3 relative = (point - root.pos) / root.size;
+        vec3 texturecolor = texture(sampler, relative.xz).rgb;
+        vec4 color = vec4(texturecolor, 1);
+        gl_FragColor = color;
     } else {
         discard;
     }

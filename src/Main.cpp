@@ -1,6 +1,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <vector>
+#include <windows.h>
 #include <GL/glew.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
@@ -113,6 +114,8 @@ int main()
         SDL_GL_SwapWindow(window);
 
         real = frame.stop();
+
+        Sleep(2);
     }
 
     text.~Text();
@@ -181,7 +184,7 @@ void initialize()
     glContext = SDL_GL_CreateContext(window);
     if (!glContext)
         die("SDL_GL_CreateContext: %s\n", SDL_GetError());
-    SDL_GL_SetSwapInterval(1); 
+    SDL_GL_SetSwapInterval(0); 
 
     glewExperimental = GL_TRUE;
     GLenum glewErr = glewInit();
