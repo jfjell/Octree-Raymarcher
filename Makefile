@@ -9,7 +9,7 @@ CXXFLAGS=-Iinclude \
 	-DSDL_MAIN_HANDLED \
 	-D_CRT_SECURE_NO_WARNINGS \
 	-std=c++17 \
-	-O0 -g
+	-Ofast
 LDFLAGS=-Llib \
 	-lSDL2main \
 	-lSDL2 \

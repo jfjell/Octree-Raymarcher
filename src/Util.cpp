@@ -14,20 +14,59 @@ static inline uintmax_t now_ns()
     return ns.count();
 }
 
-void Stopwatch::start()
+void Counter::start()
 {
     this->counter = now_ns();
 }
 
-double Stopwatch::stop()
+double Counter::restart()
 {
-    this->counter = now_ns() - this->counter;
-    return (double)this->counter / 1.0e9;
+    double ns = this->elapsed();
+    this->start();
+    size_t i = this->index++ % Counter::MEASUREMENTS;
+    this->count[i] = ns;
+    return ns;
 }
 
-double Stopwatch::elapsed()
+double Counter::elapsed()
 {
     return (now_ns() - this->counter) / 1.0e9;
+}
+
+double Counter::avg()
+{
+    double sum = 0.0;
+    for (size_t i = 0; i < Counter::MEASUREMENTS; ++i)
+        sum += this->count[i];
+    double avg = sum / Counter::MEASUREMENTS;
+    return avg;
+}
+
+double Counter::std()
+{
+    double avg = this->avg();
+    double sigma = 0.0;
+    for (size_t i = 0; i < Counter::MEASUREMENTS; ++i)
+        sigma += (this->count[i] - avg) * (this->count[i] - avg);
+    return sqrt(sigma / Counter::MEASUREMENTS);
+}
+
+double Counter::min()
+{
+    double val = this->count[0];
+    for (size_t i = 1; i < Counter::MEASUREMENTS; ++i)
+        if (val > this->count[i]) 
+            val = this->count[i];
+    return val;
+}
+
+double Counter::max()
+{
+    double val = this->count[0];
+    for (size_t i = 1; i < Counter::MEASUREMENTS; ++i)
+        if (val < this->count[i]) 
+            val = this->count[i];
+    return val;
 }
 
 [[noreturn]] void die(const char *format, ...)

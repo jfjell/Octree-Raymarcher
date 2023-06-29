@@ -9,9 +9,12 @@
 #define TWIG_LEVELS 2
 #define TWIG_WORDS 2
 
+#define MAX_DEPTH 32
+#define MAX_STEPS 512
+#define MAX_TWIG_STEPS 24
 #define MAX_DIST 256.0
 
-const float EPS = pow(2.0, -12.0);
+const float EPS = 1.0 / 16384.0;
 
 struct Root {
     vec3  pos;
@@ -86,21 +89,22 @@ float cubeEscapeDistance(vec3 a, vec3 b, vec3 cmin, vec3 cmax) {
 }
 
 vec3 cubeNormal(vec3 p, vec3 cmin, vec3 cmax) {
-    if (abs(p.x - cmin.x) < EPS) return vec3(-1, 0, 0);
-    if (abs(p.x - cmax.x) < EPS) return vec3(+1, 0, 0);
-    if (abs(p.y - cmin.y) < EPS) return vec3(0, -1, 0);
-    if (abs(p.y - cmax.y) < EPS) return vec3(0, +1, 0);
-    if (abs(p.z - cmin.z) < EPS) return vec3(0, 0, -1);
-    if (abs(p.z - cmax.z) < EPS) return vec3(0, 0, +1);
-    return vec3(0);
+    vec3 normal = vec3(0);
+    if (abs(p.x - cmin.x) <= EPS) normal += vec3(-1, 0, 0);
+    if (abs(p.x - cmax.x) <= EPS) normal += vec3(+1, 0, 0);
+    if (abs(p.y - cmin.y) <= EPS) normal += vec3(0, -1, 0);
+    if (abs(p.y - cmax.y) <= EPS) normal += vec3(0, +1, 0);
+    if (abs(p.z - cmin.z) <= EPS) normal += vec3(0, 0, -1);
+    if (abs(p.z - cmax.z) <= EPS) normal += vec3(0, 0, +1);
+    return normalize(normal);
 }
 
 Tree enclosingTree(vec3 p) {
     Tree tree = Tree(root.pos, root.size, 0);
-    for ( ; ; ) {
+    for (int d = 0; d < MAX_DEPTH; ++d) {
         uint value = Tree_SSBO[tree.index];
-        uint species = Tree_type(value);
-        if (species != BRANCH) break;
+        uint type = Tree_type(value);
+        if (type != BRANCH) break;
         float halfsize = tree.size * 0.5;
         vec3 mid = tree.pos + halfsize;
         bvec3 geq = greaterThanEqual(p, mid);
@@ -114,7 +118,7 @@ Tree enclosingTree(vec3 p) {
 bool raymarchTwig(uint index, vec3 a, vec3 b, vec3 cmin, float size, float leafsize, out float s, out Cube cube) {
     float halfsize = size * 0.5;
     float t = 0.0;
-    for ( ; ; ) {
+    for (int stw = 0; stw < MAX_TWIG_STEPS; ++stw) {
         vec3 p = a + b * t;
         if (!isInsideCube(p, cmin, cmin + size)) break;
 
@@ -127,7 +131,7 @@ bool raymarchTwig(uint index, vec3 a, vec3 b, vec3 cmin, float size, float leafs
 
         if ((Twig_SSBO[index + word] & (1 << bit)) != 0) {
             // Hit!
-            s = t;
+            s = t - EPS;
             cube = Cube(leafmin, leafmax);
             return true;
         } else {
@@ -142,7 +146,7 @@ bool raymarchTwig(uint index, vec3 a, vec3 b, vec3 cmin, float size, float leafs
 float raymarchTree(vec3 a, vec3 b, out Cube cube) {
     float t = 0.0;
 
-    for ( ; ; ) {
+    for (int tst = 0; tst < MAX_STEPS; ++tst) {
         vec3 p = a + b * t;
         if (!isInsideCube(p, root.pos, root.pos + root.size)) break;
 
@@ -160,7 +164,6 @@ float raymarchTree(vec3 a, vec3 b, out Cube cube) {
         } else if (type == TWIG) {
             float leafsize = tree.size / pow(2.0, float(TWIG_LEVELS));
             float s = 0.0;
-            //if (intersectsTwig(p, Twig_offset(Tree_SSBO[t.index]), t.minpos, leafsize)) {
             if (raymarchTwig(Twig_offset(value), p, b, tree.pos, tree.size, leafsize, s, cube)) {
                 return t + s - EPS;
             } else {

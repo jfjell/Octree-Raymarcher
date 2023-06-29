@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <queue>
 #include <glm/vec3.hpp>
 #include <glm/vec2.hpp>
@@ -168,4 +169,26 @@ void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsP
 
     root->tree = (Octree *)realloc(root->tree, root->trees * sizeof(Octree));
     root->twig = (Octwig *)realloc(root->twig, root->twigs * sizeof(Octwig));
+}
+
+#define TREE_STRUCT_SIZE (12 + 4 + 4 + 4 + 8 + 8)
+
+void writeTree(const Ocroot *root, const char *path)
+{
+    FILE *fp = fopen(path, "wb");
+    fwrite(&root->position, 1, TREE_STRUCT_SIZE, fp);
+    fwrite(root->tree, sizeof(Octree), root->trees, fp);
+    fwrite(root->twig, sizeof(Octwig), root->twigs, fp);
+    fclose(fp);
+}
+
+void readTree(Ocroot *root, const char *path)
+{
+    FILE *fp = fopen(path, "rb");
+    fread(&root->position, 1, TREE_STRUCT_SIZE, fp);
+    root->tree = (Octree *)malloc(root->trees * sizeof(Octree));
+    fread(root->tree, sizeof(Octree), root->trees, fp);
+    root->twig = (Octwig *)malloc(root->twigs * sizeof(Octwig));
+    fread(root->twig, sizeof(Octwig), root->twigs, fp);
+    fclose(fp);
 }

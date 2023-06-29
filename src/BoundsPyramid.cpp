@@ -119,6 +119,18 @@ float BoundsPyramid::max(float xf, float yf, int lv) const
     return this->bound(xf, yf, MAX, lv);
 }
 
+static float lerp(float x0, float x1, float t)
+{
+    return x1 * t + (1.0 - t) * x0;
+}
+
+static float blerp(float yx00, float yx01, float yx10, float yx11, float t, float s)
+{
+    float y0 = lerp(yx00, yx01, t);
+    float y1 = lerp(yx10, yx11, t);
+    return lerp(y0, y1, s);
+}
+
 float BoundsPyramid::bound(float xf, float yf, int b, int lv) const
 {
     assert(b == MIN || b == MAX);
@@ -126,12 +138,26 @@ float BoundsPyramid::bound(float xf, float yf, int b, int lv) const
     assert(yf >= 0 && yf <= 1);
 
     int x = xf * this->size, y = yf * this->size;
-
-    if (lv == this->levels)
+    if (lv < this->levels)
+    {
+        int d = pow2(this->levels - lv);
+        int j = index(x / d, y / d, this->size / d);
+        return this->bounds[lv][b][j];
+    }
+    else if (lv == this->levels)
+    {
         return this->base[index(x, y, this->size)];
-    assert(lv < this->levels);
-
-    int d = pow2(this->levels - lv);
-    int j = index(x / d, y / d, this->size / d);
-    return this->bounds[lv][b][j];
+    }
+    else
+    {
+        int x0 = x, y0 = y;
+        int x1 = (x0 + 1) % this->size, y1 = (y0 + 1) % this->size;
+        float t = (double)(xf * this->size) - x0;
+        float s = (double)(yf * this->size) - y0;
+        float yx00 = this->base[index(x0, y0, this->size)];
+        float yx01 = this->base[index(x1, y0, this->size)];
+        float yx10 = this->base[index(x0, y1, this->size)];
+        float yx11 = this->base[index(x1, y1, this->size)];
+        return blerp(yx00, yx01, yx10, yx11, t, s);
+    }
 }

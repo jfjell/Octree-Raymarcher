@@ -9,7 +9,7 @@
     sw.start(); \
 }while(0)
 
-#define SW_STOP(sw) printf("%fs\n", sw.stop())
+#define SW_STOP(sw) printf("%fs\n", sw.restart())
 
 struct BoundsPyramid;
 void print(const BoundsPyramid *pyr);

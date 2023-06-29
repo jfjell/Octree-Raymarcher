@@ -5,11 +5,19 @@
 [[noreturn]] void die(const char *format, ...);
 char * readFile(const char *path);
 
-struct Stopwatch
+struct Counter
 {
-    void start();
-    double stop();
-    double elapsed();
+    static constexpr size_t MEASUREMENTS = 32;
 
-    uintmax_t counter;
+    void start();
+    double restart();
+    double elapsed();
+    double avg();
+    double std();
+    double min();
+    double max();
+
+    double count[MEASUREMENTS] = {0};
+    uintmax_t counter = 0;
+    size_t index = 0;
 };

@@ -27,7 +27,7 @@ int width = 800, height = 600;
 glm::vec3 position = glm::vec3(0.f, 0.f, 0.f);
 float vertAngle = 0.f, horzAngle = 0.f;
 float fov = 90.f;
-float speed = .75f, sensitivity = 0.004f;
+float speed = .3f, sensitivity = 0.004f;
 int frameCount = 0;
 glm::vec3 direction, right, up;
 glm::mat4 mvp;
@@ -39,23 +39,49 @@ void deinitialize();
 void initializeControls();
 void glCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *argp);
 
+bool isFile(const char *path)
+{
+    FILE *fp = fopen(path, "rb");
+    if (!fp) return false;
+    fclose(fp);
+    return true;
+}
+
+void makeTree(int depth, Ocroot *root, BoundsPyramid *pyr)
+{
+    using glm::vec3;
+
+    char path[256] = {0};
+    sprintf(path, "%d.tree", depth);
+    if (isFile(path))
+    {
+        readTree(root, path);
+    }
+    else
+    {
+        grow(root, vec3(0, 0, 0), 128, depth, pyr);
+        writeTree(root, path);
+    }
+}
+
 int main() 
 {
     using glm::vec3;
 
-    Stopwatch sw;
+    Counter sw;
 
-    int depth = 10;
+    int depth = 15;
+    int pyramidepth = 1024;
     // Height pyramid for world gen
     SW_START(sw, "Generating bounded pyramid");
-    BoundsPyramid pyramid(1 << depth, 16, 1.0 / (1 << depth), 0, 0, 16);
+    BoundsPyramid pyramid(pyramidepth, 16, 1.0 / pyramidepth, 0, 0, 16);
     SW_STOP(sw);
     print(&pyramid);
 
     // Tree
     SW_START(sw, "Generating octree");
     Ocroot root;
-    grow(&root, vec3(0, 0, 0), 128, depth, &pyramid);
+    makeTree(depth, &root, &pyramid);
     SW_STOP(sw);
 
     print(&root);
@@ -81,13 +107,12 @@ int main()
     d.loadGL("textures/quad.png");
     SW_STOP(sw);
 
-    Stopwatch frame, textframe;
+    Counter frame, textframe;
     textframe.start();
-    double real = 0;
+    frame.start();
 
     while (running) 
     {
-        frame.start();
 
         input.poll();
 
@@ -101,11 +126,13 @@ int main()
 
         if (textframe.elapsed() > 1. / 24)
         {
+            double avg = frame.avg();
             text.clear();
-            text.printf("frame time: %lfms, fps: %lf", real * 1000, 1.0 / real);
+            text.printf("frame time: %lfms, fps: %lf", avg * 1000, 1.0 / avg);
             text.printf("w: %d, h: %d", width, height);
             text.printf("fov: %f, h: %f, v: %f", fov, glm::degrees(horzAngle), glm::degrees(vertAngle));
             text.printf("x: %f, y: %f, z: %f, ", position.x, position.y, position.z);
+            text.printf("speed: %f", speed);
 
             textframe.start();
         }
@@ -113,9 +140,7 @@ int main()
 
         SDL_GL_SwapWindow(window);
 
-        real = frame.stop();
-
-        Sleep(2);
+        frame.restart();
     }
 
     text.~Text();
@@ -210,6 +235,12 @@ void initializeControls()
 {
     input.bind(SDL_QUIT, [&]() { 
         running = false; 
+    });
+    input.bindKey(SDLK_UP, [&]() {
+        speed = glm::clamp(speed * 2.0, 0.001, 100.0);
+    });
+    input.bindKey(SDLK_DOWN, [&]() {
+        speed = glm::clamp(speed / 2.0, 0.001, 100.0);
     });
     input.bindKey('w', [&]() { 
         position += direction * speed; 

@@ -57,5 +57,7 @@ struct Ocroot
 struct BoundsPyramid;
 
 void grow(Ocroot *root, glm::vec3 position, float size, uint32_t depth, const BoundsPyramid *pyr);
+void writeTree(const Ocroot *root, const char *path);
+void readTree(Ocroot *root, const char *path);
 
 #endif

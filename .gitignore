@@ -9,3 +9,5 @@ include/*
 *.lib
 *.ilk
 *.pdb
+gt.txt
+*.tree
