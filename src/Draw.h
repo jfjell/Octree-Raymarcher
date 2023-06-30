@@ -65,7 +65,7 @@ struct ParallaxDrawer
 {
     Mesh mesh;
     const Ocroot *root;
-    unsigned vao, shader, tex, ssboTree, ssboTwig;
+    unsigned vao, shader, tex, ssboTree, ssboTwig, ssboBark;
     int mvp, sampler, eye, wto;
 
     ~ParallaxDrawer();

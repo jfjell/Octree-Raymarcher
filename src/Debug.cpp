@@ -119,13 +119,15 @@ void print(const Ocroot *root)
     printf("Density: %f\n", root->density);
     printf("Depth: %d\n", root->depth);
     printf("#Trees: %llu\n", root->trees);
-    printf("#Twigs: %llu\n", root->twigs);
+    printf("#Bricks: %llu\n", root->twigs);
+    printf("#Materials: %llu\n", root->barks);
 
     printf("Used %f%% of tree address space!\n", 100.f * (float)root->trees / (double)(uint32_t)~(3 << 30));
-    printf("Used %f%% of twig address space!\n", 100.f * (float)root->twigs / (double)(uint32_t)~(3 << 30));
+    printf("Used %f%% of brick address space!\n", 100.f * (float)root->twigs / (double)(uint32_t)~(3 << 30));
+    printf("Used %f%% of material address space!\n", 100.f * (float)root->barks / (double)(uint32_t)~(3 << 30));
     
     S("Memory: ");
-    printsize(root->trees * sizeof(Octree) + root->twigs * sizeof(Octwig));
+    printsize(root->trees * sizeof(Octree) + root->twigs * sizeof(Octwig) + root->barks * sizeof(Ocbark));
 
     // printTree(root, 0);
     (void)printTree;

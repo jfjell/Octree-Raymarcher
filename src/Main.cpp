@@ -23,7 +23,7 @@
 SDL_Window *window;
 SDL_GLContext glContext;
 bool running = true;
-int width = 800, height = 600;
+int width = 1920, height = 1080;
 glm::vec3 position = glm::vec3(0.f, 0.f, 0.f);
 float vertAngle = 0.f, horzAngle = 0.f;
 float fov = 90.f;
@@ -51,17 +51,21 @@ void makeTree(int depth, Ocroot *root, BoundsPyramid *pyr)
 {
     using glm::vec3;
 
+    grow(root, vec3(0, 0, 0), 128, depth, pyr);
+
+    /*
     char path[256] = {0};
     sprintf(path, "%d.tree", depth);
     if (isFile(path))
     {
-        readTree(root, path);
+        propagate(root, path);
     }
     else
     {
         grow(root, vec3(0, 0, 0), 128, depth, pyr);
-        writeTree(root, path);
+        pollinate(root, path);
     }
+    */
 }
 
 int main() 
@@ -70,7 +74,9 @@ int main()
 
     Counter sw;
 
-    int depth = 15;
+    srand(time(NULL));
+
+    int depth = 9;
     int pyramidepth = 1024;
     // Height pyramid for world gen
     SW_START(sw, "Generating bounded pyramid");

@@ -74,6 +74,11 @@ void ParallaxDrawer::loadGL(const char *texture)
     glBufferData(GL_SHADER_STORAGE_BUFFER, root->twigs * sizeof(Octwig), root->twig, GL_STATIC_DRAW); 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssboTwig);
 
+    glGenBuffers(1, &ssboBark);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboBark);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, root->barks * sizeof(Ocbark), root->bark, GL_STATIC_DRAW); 
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssboBark);
+
     // Texture
     glGenTextures(1, &this->tex);
     glActiveTexture(GL_TEXTURE0);

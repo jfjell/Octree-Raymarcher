@@ -42,6 +42,13 @@ struct Octwig
 
 static_assert(sizeof(Octwig) == (1 << (TWIG_LEVELS * 3)) / 8);
 
+struct Ocbark
+{
+    uint16_t material;
+};
+
+static_assert(sizeof(Ocbark) == sizeof(uint16_t));
+
 struct Ocroot
 {
     glm::vec3 position;
@@ -50,14 +57,16 @@ struct Ocroot
     uint32_t  depth;
     uint64_t  trees;
     uint64_t  twigs;
+    uint64_t  barks;
     Octree   *tree;
     Octwig   *twig;
+    Ocbark   *bark;
 };
 
 struct BoundsPyramid;
 
 void grow(Ocroot *root, glm::vec3 position, float size, uint32_t depth, const BoundsPyramid *pyr);
-void writeTree(const Ocroot *root, const char *path);
-void readTree(Ocroot *root, const char *path);
+void pollinate(const Ocroot *root, const char *path); // Write to file
+void propagate(Ocroot *root, const char *path); // Take from an existing tree
 
 #endif
