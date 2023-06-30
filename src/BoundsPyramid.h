@@ -16,11 +16,8 @@ struct BoundsPyramid
     void computeBounds(int lv, int x0, int y0, int x1, int y1, float *lo, float *hi);
     float bound(float xf, float yf, int b, int lv) const;
 
-    BoundsPyramid(const BoundsPyramid&) = delete;
-    BoundsPyramid operator=(const BoundsPyramid&) = delete;
-
-    BoundsPyramid(int size, float ampl, float period, float xshift, float yshift, float zshift);
-    ~BoundsPyramid();
+    void init(int size, float ampl, float period, float xshift, float yshift, float zshift);
+    void destroy();
 
     float min(float xf, float yf, int lv) const;
     float max(float xf, float yf, int lv) const;

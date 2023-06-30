@@ -110,6 +110,17 @@ static void printTree(const Ocroot *r, uint32_t t)
     }
 }
 
+struct MinMax { uint32_t min, max; };
+
+static void popMM(MinMax *mm, const Ocroot *root, uint32_t index, int depth)
+{
+    if (mm[depth].min == (uint32_t)~0 || mm[depth].min > index) mm[depth].min = index;
+    if (mm[depth].max == (uint32_t)~0 || mm[depth].max < index) mm[depth].max = index;
+
+    if (root->tree[index].type() == BRANCH)
+        for (uint32_t i = 0; i < 8; ++i)
+            popMM(mm, root, root->tree[index].offset() + i, depth+1);
+}
 
 void print(const Ocroot *root)
 {
@@ -129,10 +140,22 @@ void print(const Ocroot *root)
     S("Memory: ");
     printsize(root->trees * sizeof(Octree) + root->twigs * sizeof(Octwig) + root->barks * sizeof(Ocbark));
 
+    C('\n');
+
+#define MAXLVLS 32
+    MinMax mm[MAXLVLS];
+    for (int i = 0; i < MAXLVLS; ++i)
+        mm[i] = (MinMax){ (uint32_t)~0, (uint32_t)~0 };
+    popMM(mm, root, 0, 0);
+
+    for (int i = 0; i < MAXLVLS && mm[i].min != (uint32_t)~0; ++i)
+        printf("Depth %d: [%u, %u]\n", i, mm[i].min, mm[i].max);
+
+
     // printTree(root, 0);
     (void)printTree;
 
-    C('\n');
+    S("\n\n");
 }
 
 void print(const Mesh *mesh)

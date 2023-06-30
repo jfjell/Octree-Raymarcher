@@ -54,6 +54,7 @@ struct OctreeCubemapDrawer
     unsigned vao, shader, tex;
     int mvp, sampler;
 
+
     ~OctreeCubemapDrawer();
 
     void loadTree(const Ocroot *root);
@@ -67,12 +68,15 @@ struct ParallaxDrawer
     const Ocroot *root;
     unsigned vao, shader, tex, ssboTree, ssboTwig, ssboBark;
     int mvp, sampler, eye, wto;
+    int pos, size;
 
-    ~ParallaxDrawer();
+    void destroy();
 
     void loadTree(const Ocroot *root);
     void loadGL(const char *t);
-    void draw(const glm::mat4 MVP, glm::vec3 position);
+    void pre(const glm::mat4 MVP, glm::vec3 position);
+    void draw();
+    void post();
 };
 
 #endif

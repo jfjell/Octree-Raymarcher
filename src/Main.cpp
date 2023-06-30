@@ -47,11 +47,9 @@ bool isFile(const char *path)
     return true;
 }
 
-void makeTree(int depth, Ocroot *root, BoundsPyramid *pyr)
+void makeTree(Ocroot *root, glm::vec3 pos, float size, int depth, BoundsPyramid *pyr)
 {
-    using glm::vec3;
-
-    grow(root, vec3(0, 0, 0), 128, depth, pyr);
+    grow(root, pos, size, depth, pyr);
 
     /*
     char path[256] = {0};
@@ -76,30 +74,39 @@ int main()
 
     srand(time(NULL));
 
-    int depth = 9;
+#define TREES_WIDTH 10
+#define TREES (TREES_WIDTH * TREES_WIDTH)
+    int depth = 10;
     int pyramidepth = 1024;
     // Height pyramid for world gen
     SW_START(sw, "Generating bounded pyramid");
-    BoundsPyramid pyramid(pyramidepth, 16, 1.0 / pyramidepth, 0, 0, 16);
+    BoundsPyramid pyramid[TREES];
+    for (int i = 0; i < TREES_WIDTH; ++i)
+        for (int j = 0; j < TREES_WIDTH; ++j)
+            pyramid[i * TREES_WIDTH + j].init(pyramidepth, 16, 1.0 / pyramidepth, i*pyramidepth, j*pyramidepth, 16);
     SW_STOP(sw);
-    print(&pyramid);
+    print(&pyramid[0]);
 
+#define TREE_SIZE 128
     // Tree
     SW_START(sw, "Generating octree");
-    Ocroot root;
-    makeTree(depth, &root, &pyramid);
+    Ocroot root[TREES];
+    for (int i = 0; i < TREES_WIDTH; ++i)
+        for (int j = 0; j < TREES_WIDTH; ++j)
+        makeTree(&root[i * TREES_WIDTH + j], vec3(TREE_SIZE * i, 0.0, TREE_SIZE * j), TREE_SIZE, depth, &pyramid[i * TREES_WIDTH + j]);
     SW_STOP(sw);
 
-    print(&root);
+    print(&root[0]);
 
     // Mesh
     SW_START(sw, "Generating mesh");
     // OctreeCubefaceDrawer d;
     // OctreeCubemapDrawer d;
-    ParallaxDrawer d;
-    d.loadTree(&root); 
+    ParallaxDrawer d[TREES];
+    for (int i = 0; i < TREES; ++i)
+        d[i].loadTree(&root[i]); 
     SW_STOP(sw);
-    print(&d.mesh);
+    print(&d[0].mesh);
 
     // OpenGL, SDL, etc.
     SW_START(sw, "Initializing OpenGL and SDL");
@@ -110,7 +117,8 @@ int main()
 
     // Load mesh into openGL
     SW_START(sw, "Uploading mesh to GPU");
-    d.loadGL("textures/quad.png");
+    for (int i = 0; i < TREES; ++i)
+        d[i].loadGL("textures/quad.png");
     SW_STOP(sw);
 
     Counter frame, textframe;
@@ -119,7 +127,6 @@ int main()
 
     while (running) 
     {
-
         input.poll();
 
         computeMVP();
@@ -128,7 +135,10 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // d.draw(mvp);
-        d.draw(mvp, position);
+        d[0].pre(mvp, position);
+        for (int i = 0; i < TREES; ++i)
+            d[i].draw();
+        d[0].post();
 
         if (textframe.elapsed() > 1. / 24)
         {

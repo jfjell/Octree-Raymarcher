@@ -7,7 +7,7 @@
 #include "Util.h"
 #include "Octree.h"
 
-ParallaxDrawer::~ParallaxDrawer()
+void ParallaxDrawer::destroy()
 {
     glDeleteBuffers(1, &ssboTree);
     glDeleteBuffers(1, &ssboTwig);
@@ -48,16 +48,10 @@ void ParallaxDrawer::loadGL(const char *texture)
     // assert(sampler != -1);
     if (sampler != -1) glUniform1i(sampler, 0);
 
-    int pos   = glGetUniformLocation(shader, "root.pos");
-    int size  = glGetUniformLocation(shader, "root.size");
-    int depth = glGetUniformLocation(shader, "root.depth");
-    int trees = glGetUniformLocation(shader, "root.trees");
-    int twigs = glGetUniformLocation(shader, "root.twigs");
-    if (pos != -1) glUniform3fv(pos, 1, glm::value_ptr(root->position));
-    if (size != -1) glUniform1f(size, root->size);
-    if (depth != -1) glUniform1ui(depth, root->depth);
-    if (trees != -1) glUniform1ui(trees, root->trees);
-    if (twigs != -1) glUniform1ui(twigs, root->twigs);
+    pos = glGetUniformLocation(shader, "root.pos");
+    assert(pos != -1);
+    size = glGetUniformLocation(shader, "root.size");
+    assert(size != -1);
 
     glUseProgram(0);
 
@@ -93,24 +87,42 @@ void ParallaxDrawer::loadGL(const char *texture)
 
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
     SDL_FreeSurface(vt);
 }
 
-void ParallaxDrawer::draw(const glm::mat4 MVP, glm::vec3 position)
+void ParallaxDrawer::pre(const glm::mat4 MVP, glm::vec3 position)
 {
-    glBindVertexArray(vao);
     glUseProgram(shader);
 
     glUniformMatrix4fv(mvp, 1, GL_FALSE, glm::value_ptr(MVP));
     glUniform3fv(eye, 1, glm::value_ptr(position));
+}
+
+void ParallaxDrawer::draw()
+{
+    glBindVertexArray(vao);
+
+    glUniform3fv(pos, 1, glm::value_ptr(root->position));
+    glUniform1f(size, root->size);
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboTree);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssboTwig);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssboBark);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
 
     glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, (void *)0);
+}
 
+void ParallaxDrawer::post()
+{
     glUseProgram(0);
     glBindVertexArray(0);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
 }

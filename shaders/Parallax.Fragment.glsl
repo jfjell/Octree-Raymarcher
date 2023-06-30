@@ -14,16 +14,13 @@
 #define MAX_DEPTH 32
 #define MAX_STEPS 512
 #define MAX_TWIG_STEPS 24
-#define MAX_DIST 256.0
+#define MAX_DIST 4069.0
 
 const float EPS = 1.0 / 4096.0;
 
 struct Root {
     vec3  pos;
     float size;
-    uint  depth;
-    uint  trees;
-    uint  twigs;
 };
 
 struct Tree {
@@ -33,7 +30,6 @@ struct Tree {
 };
 
 layout(location = 0) in vec3 hitpos;
-layout(location = 1) in vec2 uv;
 
 uniform sampler2D sampler;
 uniform vec3 eye;
@@ -196,7 +192,6 @@ const vec4 materialLookup[MATERIALS] = {
 void main(void) {
     Tree tree;
     vec3 beta = normalize(hitpos - eye);
-    // vec3 alpha = isInsideCube(eye, root.pos, root.pos + root.size) ? eye : hitpos + beta * EPS; 
     vec3 alpha = eye;
     if (!isInsideCube(alpha, root.pos, root.pos + root.size)) {
         // Fix the cube going invisible incase we hit the far vertex (if we happen to be very close to the edge)
@@ -204,16 +199,14 @@ void main(void) {
         float t2 = cubeEscapeDistance(hitpos + beta * EPS, +beta, root.pos, root.pos + root.size);
         vec3 a1 = hitpos - beta * t1;
         vec3 a2 = hitpos + beta * t2;
-        if (distance(alpha, a1) < distance(alpha, a2))
-            alpha = a1;
-        else
-            alpha = a2;
+        alpha = (distance(alpha, a1) < distance(alpha, a2)) ? a1 : a2;
     }
-    if (!isInsideCube(alpha, root.pos, root.pos + root.size)) alpha = hitpos;
+
     float sigma = raymarchTree(alpha, beta, tree);
 
     if (sigma < MAX_DIST) {
         vec3 point = alpha + beta * sigma;
+        gl_FragDepth = distance(point, eye) / MAX_DIST;
         // vec3 relative = (point - root.pos) / root.size;
         // vec3 texturecolor = texture(sampler, relative.xz).rgb;
         vec3 normal = cubeNormal(point, tree.pos, tree.pos + tree.size);

@@ -65,8 +65,15 @@ struct Ocroot
 
 struct BoundsPyramid;
 
+// Generate
 void grow(Ocroot *root, glm::vec3 position, float size, uint32_t depth, const BoundsPyramid *pyr);
+// Write to a file
 void pollinate(const Ocroot *root, const char *path); // Write to file
-void propagate(Ocroot *root, const char *path); // Take from an existing tree
+// Read from a file
+void propagate(Ocroot *root, const char *path); 
+// Remove the lowest level
+void trim(Ocroot *root);
+// Opposite of trim
+void fertilize(Ocroot *root, const BoundsPyramid *pyr);
 
 #endif

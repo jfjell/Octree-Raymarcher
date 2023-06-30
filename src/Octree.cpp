@@ -231,3 +231,15 @@ void propagate(Ocroot *root, const char *path)
     fread(root->bark, sizeof(Ocbark), root->barks, fp);
     fclose(fp);
 }
+
+/*
+void trim(Ocroot *root)
+{
+
+}
+
+void fertilize(Ocroot *root, const BoundsPyramid *pyr)
+{
+
+}
+*/
