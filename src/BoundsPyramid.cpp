@@ -62,15 +62,6 @@ void BoundsPyramid::computeBase(float ampl, float period, float xshift, float ys
 {
     using glm::vec2;
 
-    {
-        vec2 p00 = vec2((float)0 + xshift, (float)0 + yshift);
-        vec2 p01 = vec2((float)0 + xshift, (float)this->size - 1 + yshift);
-        vec2 p10 = vec2((float)this->size - 1 + xshift, (float)0 + yshift);
-        vec2 p11 = vec2((float)this->size - 1 + xshift, (float)this->size - 1 + yshift);
-        printf("\npxy: p00 -> p01 -> p10 -> p11 = \n(%f,%f) ->\n(%f,%f) ->\n(%f,%f) ->\n(%f,%f)\n\n",
-            p00.x, p00.y, p01.x, p01.y, p10.x, p10.y, p11.x, p11.y);
-    }
-
     for (int y = 0; y < this->size; ++y)
     {
         for (int x = 0; x < this->size; ++x)
