@@ -1,7 +1,7 @@
 .vscode/*
+include/*
 obj/*
 lib/*
-include/*
 *.dll
 *.exe
 *.o
@@ -9,5 +9,7 @@ include/*
 *.lib
 *.ilk
 *.pdb
-gt.txt
+*.txt
+*.png
 *.tree
+*.
