@@ -30,6 +30,7 @@ void printsize(size_t value)
         cout << value << "B";
 }
 
+/*
 static void B(int size)
 {
     C('+');
@@ -37,7 +38,9 @@ static void B(int size)
         C('-');
     C('+');
 }
+*/
 
+/*
 static void grid(float *g, int s)
 {
     int bm = 9, bp = s-1+2;
@@ -57,12 +60,13 @@ static void grid(float *g, int s)
     B(s*bm+bp); 
     C('\n');
 }
+*/
 
 void print(const BoundsPyramid *pyr)
 {
     printf("[BoundsPyramid]\n");
-    printf("Size: %d\n", pyr->size);
-    printf("Levels: %d\n", pyr->levels);
+    printf("Size: %d\n", (int)pyr->size);
+    printf("Levels: %d\n", (int)pyr->levels);
 
     size_t m = pyr->size * pyr->size * sizeof(float);
     size_t s = pyr->size / 2;
@@ -92,23 +96,25 @@ void print(const BoundsPyramid *pyr)
     grid(pyr->base, pyr->size);
     */
 
-   (void)grid;
+   // (void)grid;
     C('\n');
 }
 
+/*
 static void printTree(const Ocroot *r, uint32_t t)
 {
     const char *tps[] = { "empty", "leaf", "branch", "twig" };
     Octype tp = (Octype)r->tree[t].type();
     printf("%08x:[%s:%08x]\n", t, tps[tp], (uint32_t)r->tree[t].offset());
     if (tp == TWIG)
-        printf("\t%016llx\n", (uint64_t)r->twig[r->tree[t].offset()].leafmap[0]);
+        (void)0; //printf("\t%016llx\n", (uint64_t)r->twig[r->tree[t].offset()].leafmap[0]);
     if (tp == BRANCH)
     {
         for (int i = 0; i < 8; ++i)
-            printTree(r, r->tree[t].offset() + i);
+            printTree(r, (uint32_t)r->tree[t].offset() + i);
     }
 }
+*/
 
 struct MinMax { uint32_t min, max; };
 
@@ -119,7 +125,7 @@ static void popMM(MinMax *mm, const Ocroot *root, uint32_t index, int depth)
 
     if (root->tree[index].type() == BRANCH)
         for (uint32_t i = 0; i < 8; ++i)
-            popMM(mm, root, root->tree[index].offset() + i, depth+1);
+            popMM(mm, root, (uint32_t)root->tree[index].offset() + i, depth+1);
 }
 
 void print(const Ocroot *root)
@@ -131,21 +137,22 @@ void print(const Ocroot *root)
     printf("Depth: %d\n", root->depth);
     printf("#Trees: %llu\n", root->trees);
     printf("#Bricks: %llu\n", root->twigs);
-    printf("#Materials: %llu\n", root->barks);
 
     printf("Used %f%% of tree address space!\n", 100.f * (float)root->trees / (double)(uint32_t)~(3 << 30));
     printf("Used %f%% of brick address space!\n", 100.f * (float)root->twigs / (double)(uint32_t)~(3 << 30));
-    printf("Used %f%% of material address space!\n", 100.f * (float)root->barks / (double)(uint32_t)~(3 << 30));
     
     S("Memory: ");
-    printsize(root->trees * sizeof(Octree) + root->twigs * sizeof(Octwig) + root->barks * sizeof(Ocbark));
+    printsize(root->trees * sizeof(Octree) + root->twigs * sizeof(Octwig));
 
     C('\n');
 
 #define MAXLVLS 32
     MinMax mm[MAXLVLS];
     for (int i = 0; i < MAXLVLS; ++i)
-        mm[i] = (MinMax){ (uint32_t)~0, (uint32_t)~0 };
+    {
+        mm[i].min = (uint32_t)~0;
+        mm[i].max = (uint32_t)~0;
+    }
     popMM(mm, root, 0, 0);
 
     for (int i = 0; i < MAXLVLS && mm[i].min != (uint32_t)~0; ++i)
@@ -153,7 +160,7 @@ void print(const Ocroot *root)
 
 
     // printTree(root, 0);
-    (void)printTree;
+    // (void)printTree;
 
     S("\n\n");
 }

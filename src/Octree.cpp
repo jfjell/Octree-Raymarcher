@@ -16,20 +16,8 @@ unsigned Octwig::word(unsigned x, unsigned y, unsigned z)
     assert(x < TWIG_SIZE);
     assert(y < TWIG_SIZE);
     assert(z < TWIG_SIZE);
-    unsigned i = z / 2;
+    unsigned i = (z * TWIG_SIZE * TWIG_SIZE) + (y * TWIG_SIZE) + x;
     assert(i < TWIG_WORDS);
-    (void)x;
-    (void)y;
-    return i;
-}
-
-unsigned Octwig::bit(unsigned x, unsigned y, unsigned z)
-{
-    assert(x < TWIG_SIZE);
-    assert(y < TWIG_SIZE);
-    assert(z < TWIG_SIZE);
-    unsigned i = (z / 2) * 16 + y * 4 + x;
-    assert(i < TWIG_BITS);
     return i;
 }
 
@@ -64,11 +52,9 @@ void Octree::cut(unsigned i, bool *xg, bool *yg, bool *zg)
 
 #define INVALID_OFFSET (~((uint32_t)3 << 30))
 
-#define MATERIALS 8
-
 uint16_t heightMaterial(float y)
 {
-    return (int)glm::clamp(y / 0.05, 0.0, 3.0);
+    return (uint16_t)glm::clamp(y / 0.03, 1.0, 4.0);
 }
 
 void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsPyramid *pyr)
@@ -87,14 +73,6 @@ void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsP
     uint64_t allocatedTwigs = 16;
     root->twigs = 0;
     root->twig  = (Octwig *)malloc(allocatedTwigs * sizeof(Octwig));
-
-    uint64_t allocatedLeftBarks = 16; 
-    size_t leftBarkIndex = 0;
-    Ocbark *leftBark = (Ocbark *)malloc(allocatedLeftBarks * sizeof(Ocbark));
-    
-    size_t allocatedRightBarks = 16;
-    size_t rightBarkIndex = 0;
-    Ocbark *rightBark = (Ocbark *)malloc(allocatedRightBarks * sizeof(Ocbark));
 
     struct Ocentry
     {
@@ -124,12 +102,7 @@ void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsP
         else if (low > t.pos.y + t.size)
         {
             // Minimum height in this quadrant is higher => leaf/solid
-            uint32_t offset = rightBarkIndex++;
-            root->tree[t.offset] = Octree(LEAF, offset);
-
-            if (rightBarkIndex >= allocatedRightBarks)
-                rightBark = (Ocbark *)realloc(rightBark, (allocatedRightBarks *= 2) * sizeof(Ocbark));
-            rightBark[offset].material = heightMaterial(p.y);
+            root->tree[t.offset] = Octree(LEAF, heightMaterial(p.y));
         }
         else if (t.depth == root->depth - TWIG_LEVELS)
         {
@@ -152,23 +125,19 @@ void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsP
                         (void)l;
 
                         // Similar logic to above
+                        uint32_t w = Octwig::word(x, y, z);
                        if (h >= t.pos.y + y *twigLeafSize) // Leaf
-                            twig.leafmap[Octwig::word(x, y, z)] |=  (1 << Octwig::bit(x, y, z));
+                            twig.leaf[w] = heightMaterial(p.y);
                         else // Empty
-                            twig.leafmap[Octwig::word(x, y, z)] &= ~(1 << Octwig::bit(x, y, z));
-
+                            twig.leaf[w] = 0;
                     }
                 }
             }
             if (root->twigs >= allocatedTwigs)
                 root->twig = (Octwig *)realloc(root->twig, (allocatedTwigs *= 2) * sizeof(Octwig));
-            uint32_t offset = root->twigs++;
-            root->tree[t.offset] = Octree(TWIG, offset);
+            uint64_t offset = root->twigs++;
+            root->tree[t.offset] = Octree(TWIG, (uint32_t)offset);
             root->twig[offset] = twig;
-
-            if (leftBarkIndex >= allocatedLeftBarks)
-                leftBark = (Ocbark *)realloc(leftBark, (allocatedLeftBarks *= 2) * sizeof(Ocbark));
-            leftBark[leftBarkIndex++].material = heightMaterial(p.y);
         }
         else
         {
@@ -178,36 +147,25 @@ void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsP
             if (root->trees >= allocatedTrees + 8)
                 root->tree = (Octree *)realloc(root->tree, (allocatedTrees *= 2) * sizeof(Octree));
             
-            uint32_t offset = root->trees;
+            uint64_t offset = root->trees;
 
             for (int i = 0; i < 8; ++i)
             {
                 bool xg, yg, zg;
                 Octree::cut(i, &xg, &yg, &zg);
-                q.push({ t.pos + vec3(xg, yg, zg) * (t.size / 2), t.size / 2, t.depth + 1, offset + i });
+                q.push({ t.pos + vec3(xg, yg, zg) * (t.size / 2), t.size / 2, t.depth + 1, (uint32_t)offset + i });
             }
 
             root->trees += 8;
-            root->tree[t.offset] = Octree(BRANCH, offset);
+            root->tree[t.offset] = Octree(BRANCH, (uint32_t)offset);
         }
     }
 
     root->tree = (Octree *)realloc(root->tree, root->trees * sizeof(Octree));
     root->twig = (Octwig *)realloc(root->twig, root->twigs * sizeof(Octwig));
-
-    assert(leftBarkIndex == root->twigs);
-    root->barks = leftBarkIndex + rightBarkIndex;
-    root->bark = (Ocbark *)malloc(root->barks * sizeof(Ocbark));
-    for (size_t i = 0; i < leftBarkIndex; ++i)
-        root->bark[i] = leftBark[i];
-    for (size_t i = 0; i < rightBarkIndex; ++i)
-        root->bark[root->barks - 1 - i] = rightBark[i];
-
-    free(leftBark);
-    free(rightBark);
 }
 
-#define TREE_STRUCT_SIZE (12 + 4 + 4 + 4 + 8 + 8 + 8)
+#define TREE_STRUCT_SIZE (sizeof(Ocroot) - sizeof(void *) * 2)
 
 void pollinate(const Ocroot *root, const char *path)
 {
@@ -215,7 +173,6 @@ void pollinate(const Ocroot *root, const char *path)
     fwrite(&root->position, 1, TREE_STRUCT_SIZE, fp);
     fwrite(root->tree, sizeof(Octree), root->trees, fp);
     fwrite(root->twig, sizeof(Octwig), root->twigs, fp);
-    fwrite(root->bark, sizeof(Ocbark), root->barks, fp);
     fclose(fp);
 }
 
@@ -227,8 +184,6 @@ void propagate(Ocroot *root, const char *path)
     fread(root->tree, sizeof(Octree), root->trees, fp);
     root->twig = (Octwig *)malloc(root->twigs * sizeof(Octwig));
     fread(root->twig, sizeof(Octwig), root->twigs, fp);
-    root->bark = (Ocbark *)malloc(root->barks * sizeof(Ocbark));
-    fread(root->bark, sizeof(Ocbark), root->barks, fp);
     fclose(fp);
 }
 

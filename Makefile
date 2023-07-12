@@ -1,43 +1,45 @@
-SUFFIXES+=.d
+# Only use with nmake!
 
-CXX=clang++
-LD=clang++
-CXXFLAGS=-Iinclude \
-	-Wall \
-	-Wextra \
-	-Werror \
-	-DSDL_MAIN_HANDLED \
-	-D_CRT_SECURE_NO_WARNINGS \
-	-std=c++17 \
-	-Ofast
-LDFLAGS=-Llib \
-	-lSDL2main \
-	-lSDL2 \
-	-lSDL2_ttf \
-	-lSDL2_image \
-	-lglew32 \
-	-lopengl32 \
-	-mwindows -g
+.PHONY: all
 
-SRC=src
-OBJ=obj
-CXXFILES=$(wildcard $(SRC)/*.cpp)
-OBJFILES=$(patsubst $(SRC)/%.cpp,$(OBJ)/%.o,$(CXXFILES))
+!IF [python -c "import os; list(map(lambda x: print('src/'+x+' ', end=''), filter(lambda x: x.endswith('.cpp'), os.listdir('src'))))" >cpp.txt] == 0
+CPPFILES=\
+!include cpp.txt
+OBJFILES=$(subst src/,obj\,$(subst .cpp,.obj,$(CPPFILES)))
+!IF [del /f cpp.txt] != 0
+!ENDIF
+!ENDIF
 
-.PHONY: clean all
+CPP=cl
+LD=link
+CPPFLAGS=/Iinclude \
+	/DSDL_MAIN_HANDLED \
+	/D_CRT_SECURE_NO_WARNINGS \
+	/std:c++17 \
+	/W4 \
+	/WX \
+	/EHsc \
+	/wd4458 /wd4201
+LDFLAGS=/LIBPATH:lib \
+	SDL2main.lib \
+	SDL2.lib \
+	SDL2_ttf.lib \
+	SDL2_image.lib \
+	glew32.lib \
+	opengl32.lib
 
-all: octree.exe
+EXE=octree.exe
 
-octree.exe: $(OBJFILES) Makefile
-	$(LD) $(OBJFILES) $(LDFLAGS) -o $@
+all: $(EXE)
 
 clean:
-	del /f /q $(OBJ)\* octree.exe
+	del /f /q obj\* octree.exe
 
-$(OBJ)/%.d: $(SRC)/%.cpp Makefile
-	$(CXX) $(CXXFLAGS) -MM -MT '$(patsubst $(SRC)/%.cpp,$(OBJ)/%.o,$<)' $< -MF $@
+rebuild: clean all
 
-$(OBJ)/%.o: $(SRC)/%.cpp $(OBJ)/%.d Makefile
-	$(CXX) $(CXXFLAGS) -o $@ -c $<
+$(EXE): $(OBJFILES)
+	$(LD) $(LDFLAGS) /out:$@ $(OBJFILES)
 
+{src\}.cpp{obj\}.obj:
+	$(CPP) $(CPPFLAGS) /c /Fo:$@ $< 
 

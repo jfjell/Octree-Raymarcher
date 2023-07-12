@@ -1,7 +1,4 @@
 #include <assert.h>
-#include <fstream>
-#include <sstream>
-#include <string>
 #include <GL/glew.h>
 #include "Shader.h"
 #include "Util.h"
@@ -26,7 +23,7 @@ Shader Shader::compile(const char *path, unsigned int type)
         char *plog = new char[size];
         glGetShaderInfoLog(shader, size, &size, plog);
         die("glCompileShader(\"%s\"): %s\n", path, plog);
-        delete[] plog;
+        // delete[] plog;
     }
     glAttachShader(this->program, shader);
 
@@ -61,7 +58,7 @@ unsigned int Shader::link()
         char *plog = new char[size];
         glGetProgramInfoLog(this->program, size, &size, plog);
         die("glLinkProgram: %s\n", plog);
-        delete[] plog;
+        // delete[] plog;
     }
 
     return this->program;

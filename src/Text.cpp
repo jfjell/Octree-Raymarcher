@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <stdarg.h>
+#include <assert.h>
 #include <vector>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <GL/glew.h>
 #include "Text.h"
-#include "Draw.h"
 #include "Shader.h"
 
 const float QUAD_VERTICES[] = {
@@ -16,8 +16,8 @@ const float QUAD_VERTICES[] = {
 };
 
 const unsigned short QUAD_INDICES[] = {
-    0, 1, 2, // /t
-    2, 3, 0, // t/
+    0, 1, 2, // /.
+    2, 3, 0, // ./
 };
 
 void Text::init(const char *fontpath, int size, int width, int height)
@@ -26,14 +26,15 @@ void Text::init(const char *fontpath, int size, int width, int height)
     this->size = size;
     this->width = width;
     this->height = height;
+    this->space = 2;
+    this->dx = space;
+    this->dy = space;
+    this->redraw = true;
+
     this->font = TTF_OpenFont(fontpath, size);
     assert(this->font != NULL);
 
-    this->redraw = true;
-    this->space = 2;
-    this->xpos = space;
-    this->ypos = space;
-    unsigned int alpha = 0xff << 24, red = 0xff << 16, green = 0xff << 8, blue = 0xff;
+    uint32_t alpha = 0xffu << 24, red = 0xffu << 16, green = 0xffu << 8, blue = 0xffu;
     this->surface = SDL_CreateRGBSurface(0, width, height, 32, alpha, red, green, blue);
 
     this->linecount = 32;
@@ -104,9 +105,9 @@ void Text::printf(const char *format, ...)
     SDL_Surface *s = TTF_RenderUTF8_Blended(this->font, this->line, w);
     assert(s != NULL);
 
-    SDL_Rect coords = { xpos, ypos, s->w, s->h };
+    SDL_Rect coords = { this->dx, this->dy, s->w, s->h };
     SDL_BlitSurface(s, NULL, this->surface, &coords);
-    this->ypos += s->h + space;
+    this->dy += s->h + space;
 
     this->redraw = true;
     SDL_FreeSurface(s);
@@ -115,7 +116,7 @@ void Text::printf(const char *format, ...)
 void Text::clear()
 {
     SDL_FillRect(this->surface, NULL, 0x00000000);
-    this->ypos = space;
+    this->dy = space;
     this->redraw = true;
 }
 
@@ -126,7 +127,13 @@ void Text::draw()
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, this->tex);
-    if (this->redraw) glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, surface->w, surface->h, GL_RGBA, GL_UNSIGNED_BYTE, surface->pixels);
+    if (this->redraw) 
+    {
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 
+            0, 0, surface->w, surface->h, 
+            GL_RGBA, GL_UNSIGNED_BYTE, 
+            surface->pixels);
+    }
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void *)0);
 

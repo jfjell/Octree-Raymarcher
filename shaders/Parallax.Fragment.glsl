@@ -9,7 +9,7 @@
 
 #define TWIG_SIZE 4
 #define TWIG_LEVELS 2
-#define TWIG_WORDS 2
+#define TWIG_WORDS 64
 
 #define MAX_DEPTH 32
 #define MAX_STEPS 512
@@ -41,11 +41,7 @@ layout(std430, binding = 2) restrict readonly buffer ssboTree {
 };
 
 layout(std430, binding = 3) restrict readonly buffer ssboTwig {
-    uint Twig_SSBO[];
-};
-
-layout(std430, binding = 4) restrict readonly buffer ssboBark {
-    uint16_t Bark_SSBO[];
+    uint16_t Twig_SSBO[];
 };
 
 uint Tree_type(uint t) {
@@ -65,18 +61,7 @@ uint Twig_offset(uint t) {
 }
 
 uint Twig_word(uint x, uint y, uint z) {
-    return z / 2;
-}
-
-uint Twig_bit(uint x, uint y, uint z) {
-    return (z / 2) * 16 + y * 4 + x;
-}
-
-uint Bark_offset(uint t) {
-    if (Tree_type(t) == LEAF)
-        return Bark_SSBO.length() - Tree_offset(t) - 1;
-    else if (Tree_type(t) == TWIG)
-        return Tree_offset(t);
+    return z * 16 + y * 4 + x;
 }
 
 bool isInsideCube(vec3 p, vec3 cmin, vec3 cmax) {
@@ -129,14 +114,14 @@ bool raymarchTwig(uint index, vec3 a, vec3 b, vec3 cmin, float size, float leafs
         if (!isInsideCube(off, vec3(0), vec3(TWIG_SIZE-1))) break;
 
         uint word = Twig_word(off.x, off.y, off.z);
-        uint bit  = Twig_bit(off.x, off.y, off.z);
         vec3 leafmin = cmin + vec3(off) * leafsize;
         vec3 leafmax = leafmin + leafsize;
 
-        if ((Twig_SSBO[index + word] & (1 << bit)) != 0) {
+        uint bark = Twig_SSBO[index + word];
+        if (bark != 0) {
             // Hit!
             s = t - EPS;
-            tree = Tree(leafmin, leafsize, 0);
+            tree = Tree(leafmin, leafsize, bark);
             return true;
         } else {
             // Missed, go next
@@ -163,13 +148,13 @@ float raymarchTree(vec3 a, vec3 b, out Tree treeHit) {
             t += escape + EPS;
         } else if (type == LEAF) {
             // Found a match
-            treeHit = Tree(tree.pos, tree.size, tree.index);
+            uint material = Tree_offset(value);
+            treeHit = Tree(tree.pos, tree.size, material);
             return t - EPS;
         } else if (type == TWIG) {
             float leafsize = tree.size / pow(2.0, float(TWIG_LEVELS));
             float s = 0.0;
             if (raymarchTwig(Twig_offset(value), p, b, tree.pos, tree.size, leafsize, s, treeHit)) {
-                treeHit = Tree(treeHit.pos, leafsize, tree.index);
                 return t + s;
             } else {
                 float escape = cubeEscapeDistance(p, b, tree.pos, tree.pos + tree.size);
@@ -211,7 +196,7 @@ void main(void) {
         // vec3 texturecolor = texture(sampler, relative.xz).rgb;
         vec3 normal = cubeNormal(point, tree.pos, tree.pos + tree.size);
         // vec4 color = vec4(texturecolor + normal * 0.5, 1);
-        uint material = Bark_SSBO[Bark_offset(Tree_SSBO[tree.index])];
+        uint material = tree.index - 1;
         vec4 color = vec4(materialLookup[material].xyz + normal * 0.1, 1);
         gl_FragColor = color;
     } else {

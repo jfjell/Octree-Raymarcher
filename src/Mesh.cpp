@@ -25,7 +25,7 @@ void Mesh::add(const float *v, size_t nv,
         this->vtxcoords.push_back(v[j] * sv[j % 3] + tv[j % 3]);
 
     for (size_t j = 0; j < ni; ++j)
-        this->indices.push_back(i[j] + si);
+        this->indices.push_back(i[j] + (unsigned int)si);
 
     this->uvcoords.insert(this->uvcoords.end(), u, u + nu);
 }
@@ -61,7 +61,7 @@ void Mesh::bind()
         glGenBuffers(1, &this->uv);
         glBindBuffer(GL_ARRAY_BUFFER, this->uv);
         glBufferData(GL_ARRAY_BUFFER, this->uvcoords.size() * sizeof(float), this->uvcoords.data(), GL_STATIC_DRAW);
-        glVertexAttribPointer(1, pv, GL_FLOAT, GL_FALSE, 0, (void *)0);
+        glVertexAttribPointer(1, (int)pv, GL_FLOAT, GL_FALSE, 0, (void *)0);
         glEnableVertexAttribArray(1);
     }
 }
@@ -138,7 +138,7 @@ const float cubeVertices[8*3] = {
     1., 1., 1., 
 };
 
-#define N (1.0 / 3.0) // Normalized value of (.5, .5, .5)
+#define N (1.0f / 3.0f) // Normalized value of (.5, .5, .5)
 
 const float cubeUV[8*3] = {
     -N, -N, -N,

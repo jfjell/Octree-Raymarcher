@@ -5,159 +5,170 @@
 #include <glm/gtc/noise.hpp>
 #include "BoundsPyramid.h"
 
-static inline bool ispowof2(int i)
+static inline bool ispowof2(size_t i)
 {
     return !(i & (i - 1));
 }
 
-static inline int log2(int i)
+#ifdef _MSC_VER
+# include <intrin.h>
+#endif
+static inline size_t log2(size_t i)
 {
+#ifdef _MSC_VER
+    return _tzcnt_u64(i);
+#else
     return __builtin_ctz(i);
+#endif
 }
 
-static inline int pow2(int i)
+static inline size_t pow2(size_t i)
 {
-    return 1 << i;
+    return (size_t)1 << i;
 }
 
-static inline int index(int x, int y, int s)
+static inline size_t index(size_t x, size_t z, size_t s)
 {
-    return y * s + x;
+    return z * s + x;
 }
 
-// Compute and store the bounds at the 4 points in the rectangle (x0, y0) -> (x1, y1) at level lv
-void BoundsPyramid::computeBounds(int lv, int x0, int y0, int x1, int y1, float *lo, float *hi)
+static inline float lerp(float x0, float x1, float t)
 {
-    using glm::min;
-    using glm::max;
-
-    int size = this->size / pow2(this->levels - lv);
-    int nw = index(x0, y0, size);
-    int ne = index(x1, y0, size);
-    int sw = index(x0, y1, size);
-    int se = index(x1, y1, size);
-
-    if (lv == this->levels)
-    {
-        *lo = min(min(base[nw], base[ne]), min(base[sw], base[se]));
-        *hi = max(max(base[nw], base[ne]), max(base[sw], base[se]));
-    }
-    else
-    {
-        assert(lv < this->levels);
-
-        float *ll = bounds[lv][MIN];
-        float *hl = bounds[lv][MAX];
-        computeBounds(lv+1, x0*2, y0*2, x0*2+1, y0*2+1, &ll[nw], &hl[nw]);
-        computeBounds(lv+1, x1*2, y0*2, x1*2+1, y0*2+1, &ll[ne], &hl[ne]);
-        computeBounds(lv+1, x0*2, y1*2, x0*2+1, y1*2+1, &ll[sw], &hl[sw]);
-        computeBounds(lv+1, x1*2, y1*2, x1*2+1, y1*2+1, &ll[se], &hl[se]);
-
-        if (lo) *lo = min(min(ll[nw], ll[ne]), min(ll[sw], ll[se]));
-        if (hi) *hi = max(max(hl[nw], hl[ne]), max(hl[sw], hl[se]));
-    }
+    return (float)(x1 * t + (1.0 - t) * x0);
 }
 
-void BoundsPyramid::computeBase(float ampl, float period, float xshift, float yshift, float zshift)
-{
-    using glm::vec2;
-
-    for (int y = 0; y < this->size; ++y)
-    {
-        for (int x = 0; x < this->size; ++x)
-        {
-            vec2 p = vec2((float)x + xshift, (float)y + yshift);
-            float n = glm::simplex(p * period) * ampl + zshift;
-            int i = index(x, y, this->size);
-            this->base[i] = n;
-        }
-    }
-}
-
-void BoundsPyramid::init(int size, float ampl, float period, float xshift, float yshift, float zshift)
-{
-    assert(ispowof2(size));
-
-    int levels = log2(size);
-
-    this->size = size;
-    this->levels = levels;
-    this->base = new float[size*size];
-    this->bounds = new float**[levels];
-    for (int i = 0; i < levels; ++i)
-    {
-        int s = pow2(i);
-        this->bounds[i] = new float*[2];
-        this->bounds[i][MIN] = new float[s*s];
-        this->bounds[i][MAX] = new float[s*s];
-    }
-
-    this->computeBase(ampl, period, xshift, yshift, zshift);
-    this->computeBounds(0, 0, 0, 0, 0, NULL, NULL);
-}
-
-void BoundsPyramid::destroy()
-{
-    for (int i = 0; i < levels; ++i)
-    {
-        delete[] this->bounds[i][MIN];
-        delete[] this->bounds[i][MAX];
-        delete[] this->bounds[i];
-    }
-    delete[] this->bounds;
-    delete[] this->base;
-        
-}
-
-float BoundsPyramid::min(float xf, float yf, int lv) const
-{
-    return this->bound(xf, yf, MIN, lv);
-}
-
-float BoundsPyramid::max(float xf, float yf, int lv) const
-{
-    return this->bound(xf, yf, MAX, lv);
-}
-
-static float lerp(float x0, float x1, float t)
-{
-    return x1 * t + (1.0 - t) * x0;
-}
-
-static float blerp(float yx00, float yx01, float yx10, float yx11, float t, float s)
+static inline float blerp(float yx00, float yx01, float yx10, float yx11, float t, float s)
 {
     float y0 = lerp(yx00, yx01, t);
     float y1 = lerp(yx10, yx11, t);
     return lerp(y0, y1, s);
 }
 
-float BoundsPyramid::bound(float xf, float yf, int b, int lv) const
+void BoundsPyramid::init(size_t size, float ampl, float period, float xshift, float yshift, float zshift)
 {
-    assert(b == MIN || b == MAX);
-    assert(xf >= 0 && xf <= 1);
-    assert(yf >= 0 && yf <= 1);
+    assert(ispowof2(size));
 
-    int x = xf * this->size, y = yf * this->size;
-    if (lv < this->levels)
+    this->size = size;
+    this->levels = log2(size);
+    this->amplitude = ampl;
+    this->shift = yshift;
+
+    this->basequad = new half[this->size*this->size];
+    this->minquad = new half*[this->levels+1];
+    this->maxquad = new half*[this->levels+1];
+
+    for (size_t i = 0, s = 1; i < levels; ++i, s *= 2)
     {
-        int d = pow2(this->levels - lv);
-        int j = index(x / d, y / d, this->size / d);
-        return this->bounds[lv][b][j];
+        this->minquad[i] = new half[s*s];
+        for (size_t j = 0; j < s*s; ++j)
+            this->minquad[i][j] = 1.0;
+
+        this->maxquad[i] = new half[s*s];
+        for (size_t j = 0; j < s*s; ++j)
+            this->maxquad[i][j] = -1.0;
     }
-    else if (lv == this->levels)
+    this->minquad[this->levels] = this->maxquad[this->levels] = this->basequad;
+
+    this->computeBase(period, xshift, zshift);
+
+    for (size_t i = 0; i < levels; ++i)
     {
-        return this->base[index(x, y, this->size)];
+        this->computeBoundsAbove(levels - i);
     }
-    else
+}
+
+void BoundsPyramid::deinit()
+{
+    delete[] this->basequad;
+    for (size_t i = 0; i < levels; ++i)
     {
-        int x0 = x, y0 = y;
-        int x1 = (x0 + 1) % this->size, y1 = (y0 + 1) % this->size;
-        float t = (double)(xf * this->size) - x0;
-        float s = (double)(yf * this->size) - y0;
-        float yx00 = this->base[index(x0, y0, this->size)];
-        float yx01 = this->base[index(x1, y0, this->size)];
-        float yx10 = this->base[index(x0, y1, this->size)];
-        float yx11 = this->base[index(x1, y1, this->size)];
-        return blerp(yx00, yx01, yx10, yx11, t, s);
+        delete[] this->minquad[i];
+        delete[] this->maxquad[i];
     }
+    delete[] this->minquad;
+    delete[] this->maxquad;
+}
+
+void BoundsPyramid::computeBase(float period, float xshift, float zshift)
+{
+    for (size_t z = 0, i = 0; z < this->size; ++z)
+    {
+        for (size_t x = 0; x < this->size; ++x, ++i)
+        {
+            auto point = glm::vec2((float)x + xshift, (float)z + zshift) * period;
+            float noise = glm::simplex(point);
+            assert(noise >= -1.0 && noise <= +1.0);
+            this->basequad[i] = noise;
+        }
+    }
+}
+
+void BoundsPyramid::computeBoundsAbove(size_t lv)
+{
+    using glm::min;
+    using glm::max;
+
+    assert(0 < lv && lv <= this->levels);
+    size_t above = lv-1;
+    size_t s = pow2(lv);
+
+    for (size_t z = 0; z < s; ++z)
+    {
+        for (size_t x = 0; x < s; x += 2)
+        {
+            size_t i = index(x+0, z, s);
+            size_t j = index(x+1, z, s);
+            size_t k = index(x / 2, z / 2, s / 2);
+
+            float min0 = this->minquad[above][k];
+            float min1 = this->minquad[lv][i];
+            float min2 = this->minquad[lv][j];
+
+            float max0 = this->maxquad[above][k];
+            float max1 = this->maxquad[lv][i];
+            float max2 = this->maxquad[lv][j];
+
+            this->minquad[above][k] = glm::min(min0, glm::min(min1, min2));
+            this->maxquad[above][k] = glm::max(max0, glm::max(max1, max2));
+        }
+    }
+}
+float BoundsPyramid::min(float x, float z, size_t lv) const
+{
+    return this->bound(x, z, lv, this->minquad[lv]);
+}
+
+float BoundsPyramid::max(float x, float z, size_t lv) const
+{
+    return this->bound(x, z, lv, this->maxquad[lv]);
+}
+
+float BoundsPyramid::bound(float x, float z, size_t lv, const half *q) const
+{
+    assert(0 <= x && x <= 1.0);
+    assert(0 <= z && z <= 1.0);
+    
+    // Base integer coordinates
+    size_t a = (size_t)(x * this->size);
+    size_t b = (size_t)(z * this->size);
+
+    if (lv <= this->levels)
+    {
+        // Within bounds => simply compute the index for the level and return
+        size_t d = pow2(this->levels - lv);
+        size_t i = index(a / d, b / d, this->size / d);
+        return q[i] * this->amplitude + this->shift;
+    }
+
+    // Out of bounds => interpolate values from the base
+    size_t mask = this->size - 1;
+    size_t a0 = a, a1 = (a0 + 1) & mask;
+    size_t b0 = b, b1 = (b0 + 1) & mask;
+    float t = (float)(x * this->size) - a0;
+    float s = (float)(z * this->size) - b0;
+    float ba00 = this->basequad[index(a0, b0, this->size)];
+    float ba01 = this->basequad[index(a1, b0, this->size)];
+    float ba10 = this->basequad[index(a0, b1, this->size)];
+    float ba11 = this->basequad[index(a1, b1, this->size)];
+    return blerp(ba00, ba01, ba10, ba11, t, s) * this->amplitude + this->shift;
 }

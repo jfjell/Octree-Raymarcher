@@ -72,7 +72,7 @@ int main()
 
     Counter sw;
 
-    srand(time(NULL));
+    srand((unsigned int)time(NULL));
 
 #define TREES_WIDTH 10
 #define TREES (TREES_WIDTH * TREES_WIDTH)
@@ -83,7 +83,7 @@ int main()
     BoundsPyramid pyramid[TREES];
     for (int i = 0; i < TREES_WIDTH; ++i)
         for (int j = 0; j < TREES_WIDTH; ++j)
-            pyramid[i * TREES_WIDTH + j].init(pyramidepth, 16, 1.0 / pyramidepth, i*pyramidepth, j*pyramidepth, 16);
+            pyramid[i * TREES_WIDTH + j].init(pyramidepth, 16.0f, 1.0f / pyramidepth, (float)i*pyramidepth, 16.0f, (float)j*pyramidepth);
     SW_STOP(sw);
     print(&pyramid[0]);
 
@@ -132,7 +132,7 @@ int main()
 
         computeMVP();
 
-        glClearColor(0.3, 0.3, 0.6, 1.);
+        glClearColor(0.3f, 0.3f, 0.6f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // d.draw(mvp);
@@ -261,10 +261,10 @@ void initializeControls()
         running = false; 
     });
     input.bindKey(SDLK_UP, [&]() {
-        speed = glm::clamp(speed * 2.0, 0.001, 100.0);
+        speed = (float)glm::clamp(speed * 2.0, 0.001, 100.0);
     });
     input.bindKey(SDLK_DOWN, [&]() {
-        speed = glm::clamp(speed / 2.0, 0.001, 100.0);
+        speed = (float)glm::clamp(speed / 2.0, 0.001, 100.0);
     });
     input.bindKey('w', [&]() { 
         position += direction * speed; 

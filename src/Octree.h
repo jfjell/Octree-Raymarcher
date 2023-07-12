@@ -29,25 +29,16 @@ static_assert(sizeof(Octree) == sizeof(uint32_t));
 
 #define TWIG_LEVELS 2
 #define TWIG_SIZE 4
-#define TWIG_BITS 32 // Bits per word
-#define TWIG_WORDS 2
+#define TWIG_WORDS (8*8)
 
 struct Octwig
 {
-    uint32_t leafmap[TWIG_WORDS];
+    uint16_t leaf[TWIG_WORDS];
 
     static unsigned word(unsigned x, unsigned y, unsigned z);
-    static unsigned bit(unsigned x, unsigned y, unsigned z);
 };
 
-static_assert(sizeof(Octwig) == (1 << (TWIG_LEVELS * 3)) / 8);
-
-struct Ocbark
-{
-    uint16_t material;
-};
-
-static_assert(sizeof(Ocbark) == sizeof(uint16_t));
+static_assert(sizeof(Octwig) == (1 << (TWIG_LEVELS * 3)) * sizeof(uint16_t));
 
 struct Ocroot
 {
@@ -57,10 +48,8 @@ struct Ocroot
     uint32_t  depth;
     uint64_t  trees;
     uint64_t  twigs;
-    uint64_t  barks;
     Octree   *tree;
     Octwig   *twig;
-    Ocbark   *bark;
 };
 
 struct BoundsPyramid;

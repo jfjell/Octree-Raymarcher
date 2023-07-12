@@ -10,7 +10,7 @@ struct Text
     char *line;
     const char *fontpath;
     unsigned int vao, vbo, ebo, tex, shader, sampler;
-    int space, size, width, height, xpos, ypos, linecount;
+    int space, size, width, height, dx, dy, linecount;
     bool redraw;
 
     void init(const char *font, int size, int width, int height);

@@ -1,26 +1,25 @@
 #pragma once
 
-#ifndef BOUNDPYRAMID_H
-#define BOUNDPYRAMID_H
+#ifndef BOUNDSPYRAMID_H
+#define BOUNDSPYRAMID_H
 
 struct BoundsPyramid
 {
-    static constexpr int MIN = 0, MAX = 1;
+    // using half = __fp16;
+    using half = float;
 
-    float ***bounds;
-    float *base;
-    int size;
-    int levels;
+    half *basequad, **minquad, **maxquad;
+    size_t size, levels;
+    float amplitude, shift;
 
-    void computeBase(float ampl, float period, float xshift, float yshift, float zshift);
-    void computeBounds(int lv, int x0, int y0, int x1, int y1, float *lo, float *hi);
-    float bound(float xf, float yf, int b, int lv) const;
-
-    void init(int size, float ampl, float period, float xshift, float yshift, float zshift);
-    void destroy();
-
-    float min(float xf, float yf, int lv) const;
-    float max(float xf, float yf, int lv) const;
+    void init(size_t size, float ampl, float period, float xshift, float yshift, float zshift);
+    void deinit();
+    void computeBase(float period, float xshift, float zshift);
+    void computeBoundsAbove(size_t lv);
+    float min(float x, float z, size_t lv) const;
+    float max(float x, float z, size_t lv) const;
+    float bound(float x, float z, size_t lv, const half *q) const;
 };
+
 
 #endif

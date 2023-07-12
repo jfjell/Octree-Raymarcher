@@ -32,13 +32,6 @@ void ParallaxDrawer::loadGL(const char *texture)
     glBindVertexArray(vao);
 
     // Shader
-    /*
-    this->shader = glCreateProgram();
-    Shader::compileAttach("shaders/Parallax.Vertex.glsl", GL_VERTEX_SHADER, shader);
-    Shader::compileAttach("shaders/Parallax.Fragment.glsl", GL_FRAGMENT_SHADER, shader);
-    Shader::link(shader);
-    */
-
     this->shader = Shader(glCreateProgram())
         .vertex("shaders/Parallax.Vertex.glsl")
         .fragment("shaders/Parallax.Fragment.glsl")
@@ -75,11 +68,6 @@ void ParallaxDrawer::loadGL(const char *texture)
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboTwig);
     glBufferData(GL_SHADER_STORAGE_BUFFER, root->twigs * sizeof(Octwig), root->twig, GL_STATIC_DRAW); 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssboTwig);
-
-    glGenBuffers(1, &ssboBark);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboBark);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, root->barks * sizeof(Ocbark), root->bark, GL_STATIC_DRAW); 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssboBark);
 
     // Texture
     glGenTextures(1, &this->tex);
@@ -119,12 +107,11 @@ void ParallaxDrawer::draw()
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboTree);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssboTwig);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssboBark);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
 
-    glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, (void *)0);
+    glDrawElements(GL_TRIANGLES, (unsigned int)mesh.indices.size(), GL_UNSIGNED_INT, (void *)0);
 }
 
 void ParallaxDrawer::post()
@@ -132,5 +119,4 @@ void ParallaxDrawer::post()
     glUseProgram(0);
     glBindVertexArray(0);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
 }
