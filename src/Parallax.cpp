@@ -6,6 +6,7 @@
 #include "Draw.h"
 #include "Util.h"
 #include "Octree.h"
+#include "Shader.h"
 
 void ParallaxDrawer::destroy()
 {
@@ -31,10 +32,17 @@ void ParallaxDrawer::loadGL(const char *texture)
     glBindVertexArray(vao);
 
     // Shader
+    /*
     this->shader = glCreateProgram();
     Shader::compileAttach("shaders/Parallax.Vertex.glsl", GL_VERTEX_SHADER, shader);
     Shader::compileAttach("shaders/Parallax.Fragment.glsl", GL_FRAGMENT_SHADER, shader);
     Shader::link(shader);
+    */
+
+    this->shader = Shader(glCreateProgram())
+        .vertex("shaders/Parallax.Vertex.glsl")
+        .fragment("shaders/Parallax.Fragment.glsl")
+        .link();
 
     glUseProgram(shader);
 

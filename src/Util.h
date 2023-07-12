@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 [[noreturn]] void die(const char *format, ...);
-char * readFile(const char *path);
+char * readfile(const char *path);
 
 struct Counter
 {

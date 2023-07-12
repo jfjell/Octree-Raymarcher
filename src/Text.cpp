@@ -6,66 +6,65 @@
 #include <GL/glew.h>
 #include "Text.h"
 #include "Draw.h"
+#include "Shader.h"
 
-static const float vertices[] = {
-    -1.0, -1.0,
-    1.0, -1.0,
-    1.0,  1.0,
-    -1.0,  1.0,
+const float QUAD_VERTICES[] = {
+    -1.0, +1.0, // SW
+    +1.0, +1.0, // SE
+    +1.0, -1.0, // NE
+    -1.0, -1.0, // NW
 };
 
-static const float uv[] = {
-    0.0, 0.0,
-    1.0, 0.0,
-    1.0, 1.0,
-    0.0, 1.0,
+const unsigned short QUAD_INDICES[] = {
+    0, 1, 2, // /t
+    2, 3, 0, // t/
 };
 
-static const unsigned indices[] = {
-    3, 0, 1,
-    3, 2, 1,
-};
-
-Text::Text(const char *path, int size, int width, int height)
+void Text::init(const char *fontpath, int size, int width, int height)
 {
-    this->path = path;
+    this->fontpath = fontpath;
     this->size = size;
     this->width = width;
     this->height = height;
-    this->font = TTF_OpenFont(path, size);
+    this->font = TTF_OpenFont(fontpath, size);
+    assert(this->font != NULL);
 
     this->redraw = true;
     this->space = 2;
     this->xpos = space;
     this->ypos = space;
-    this->surface = SDL_CreateRGBSurface(0, width, height, 32, 0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff);
+    unsigned int alpha = 0xff << 24, red = 0xff << 16, green = 0xff << 8, blue = 0xff;
+    this->surface = SDL_CreateRGBSurface(0, width, height, 32, alpha, red, green, blue);
 
-    this->shader = glCreateProgram();
-    Shader::compileAttach("shaders/text.vrtx.glsl", GL_VERTEX_SHADER, this->shader);
-    Shader::compileAttach("shaders/text.frag.glsl", GL_FRAGMENT_SHADER, this->shader);
-    Shader::link(this->shader);
+    this->linecount = 32;
+    this->line = new char[this->linecount];
+
+    this->shader = Shader(glCreateProgram())
+        .vertex("shaders/Text.Vertex.glsl")
+        .fragment("shaders/Text.Fragment.glsl")
+        .link();
+
+    this->sampler = glGetUniformLocation(this->shader, "tex");
+    glUniform1i(this->sampler, 0);
 
     glGenVertexArrays(1, &this->vao);
     glBindVertexArray(this->vao);
 
-    glGenBuffers(3, this->vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, this->vbo[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glGenBuffers(1, &this->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(QUAD_VERTICES), QUAD_VERTICES, GL_STATIC_DRAW);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
     glEnableVertexAttribArray(0);
 
-    glBindBuffer(GL_ARRAY_BUFFER, this->vbo[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(uv), uv, GL_STATIC_DRAW);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
-    glEnableVertexAttribArray(1);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->vbo[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+    glGenBuffers(1, &this->ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(QUAD_INDICES), QUAD_INDICES, GL_STATIC_DRAW);
 
     glGenTextures(1, &this->tex);
     glBindTexture(GL_TEXTURE_2D, this->tex);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, surface->w, surface->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, surface->pixels);
 
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -73,16 +72,18 @@ Text::Text(const char *path, int size, int width, int height)
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-Text::~Text()
+void Text::deinit()
 {
-    TTF_CloseFont(this->font);
+    delete[] this->line;
+
     glDeleteVertexArrays(1, &this->vao);
-    glDeleteBuffers(3, this->vbo);
+    glDeleteBuffers(1, &this->vbo);
+    glDeleteBuffers(1, &this->ebo);
     glDeleteTextures(1, &this->tex);
+    glDeleteProgram(this->shader);
+
+    TTF_CloseFont(this->font);
     SDL_FreeSurface(this->surface);
-    this->font = NULL;
-    this->vao = this->vbo[0] = this->vbo[1] = this->vbo[2] = this->tex = 0;
-    this->surface = NULL;
 }
 
 void Text::printf(const char *format, ...)
@@ -91,18 +92,24 @@ void Text::printf(const char *format, ...)
     va_start(args, format);
 
     int count = vsnprintf(NULL, 0, format, args);
-    this->buf.reserve(count+1);
-    vsnprintf(this->buf.data(), count+1, format, args);
+    if (count+1 >= this->linecount)
+    {
+        this->linecount = count+1;
+        delete[] this->line;
+        line = new char[this->linecount];
+    }
+    vsnprintf(this->line, count+1, format, args);
 
-    SDL_Color white = { 255, 255, 255, 255 };
-    SDL_Surface *surf = TTF_RenderText_Blended(this->font, this->buf.data(), white);
+    SDL_Color w = { 255, 255, 255, 255 };
+    SDL_Surface *s = TTF_RenderUTF8_Blended(this->font, this->line, w);
+    assert(s != NULL);
 
-    SDL_Rect coords = { xpos, ypos, surf->w, surf->h };
-    SDL_BlitSurface(surf, NULL, this->surface, &coords);
-    this->ypos += surf->h + space;
+    SDL_Rect coords = { xpos, ypos, s->w, s->h };
+    SDL_BlitSurface(s, NULL, this->surface, &coords);
+    this->ypos += s->h + space;
 
     this->redraw = true;
-    SDL_FreeSurface(surf);
+    SDL_FreeSurface(s);
 }
 
 void Text::clear()
@@ -114,18 +121,14 @@ void Text::clear()
 
 void Text::draw()
 {
-    // Copy texture data and draw
     glUseProgram(this->shader);
     glBindVertexArray(this->vao);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, this->tex);
-    if (this->redraw)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, surface->w, surface->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, surface->pixels);
-    int samplerIndex = glGetUniformLocation(this->shader, "samp");
-    glUniform1i(samplerIndex, 0);
+    if (this->redraw) glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, surface->w, surface->h, GL_RGBA, GL_UNSIGNED_BYTE, surface->pixels);
 
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)0);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void *)0);
 
     glUseProgram(0);
     glBindVertexArray(0);

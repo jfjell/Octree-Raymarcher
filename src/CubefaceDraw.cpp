@@ -5,6 +5,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "Draw.h"
 #include "Octree.h"
+#include "Shader.h"
 
 static void cubeTree(const Ocroot *r, Octree t, glm::vec3 pos, float size, Mesh *m)
 {
@@ -63,10 +64,15 @@ void OctreeCubefaceDrawer::loadGL(const char *texture)
     glBindVertexArray(vao);
 
     // Shader
+    /*
     this->shader = glCreateProgram();
     Shader::compileAttach("shaders/cube.vrtx.glsl", GL_VERTEX_SHADER, shader);
     Shader::compileAttach("shaders/cube.frag.glsl", GL_FRAGMENT_SHADER, shader);
     Shader::link(shader);
+    */
+   this->shader = Shader(glCreateProgram()).vertex("shaders/cube.vrtx.glsl")
+                                           .fragment("shaders/cube.frag.glsl")
+                                           .link();
 
     this->mvp = glGetUniformLocation(shader, "mvp");
     assert(mvp != -1);

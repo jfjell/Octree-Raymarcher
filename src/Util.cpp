@@ -77,7 +77,7 @@ double Counter::max()
     exit(-1);
 }
 
-char * readFile(const char *path)
+char * readfile(const char *path)
 {
     FILE *stream = fopen(path, "rb");    
     if (!stream)

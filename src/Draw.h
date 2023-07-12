@@ -8,12 +8,6 @@
 #include <glm/vec3.hpp>
 #include <glm/mat4x4.hpp>
 
-struct Shader
-{
-    static unsigned compileAttach(const char *path, GLenum type, unsigned program);
-    static unsigned link(unsigned program);
-};
-
 struct Mesh
 {
     std::vector<float>    vtxcoords;

@@ -2,23 +2,19 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
-#include <vector>
 
 struct Text
 {
     TTF_Font *font;
     SDL_Surface *surface;
-    std::vector<char> buf;
-    unsigned shader;
-    const char *path;
-    int space, size;
-    int width, height;
-    int xpos, ypos;
+    char *line;
+    const char *fontpath;
+    unsigned int vao, vbo, ebo, tex, shader, sampler;
+    int space, size, width, height, xpos, ypos, linecount;
     bool redraw;
-    unsigned vao, vbo[3] /* vbo, uv, ebo */, tex;
 
-    Text(const char *font, int size, int width, int height);
-    ~Text();
+    void init(const char *font, int size, int width, int height);
+    void deinit();
     void printf(const char *format, ...);
     void draw();
     void clear();

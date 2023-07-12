@@ -76,8 +76,8 @@ int main()
 
 #define TREES_WIDTH 10
 #define TREES (TREES_WIDTH * TREES_WIDTH)
-    int depth = 10;
-    int pyramidepth = 1024;
+    int depth = 7;
+    int pyramidepth = 256;
     // Height pyramid for world gen
     SW_START(sw, "Generating bounded pyramid");
     BoundsPyramid pyramid[TREES];
@@ -112,7 +112,8 @@ int main()
     SW_START(sw, "Initializing OpenGL and SDL");
     initialize();
     initializeControls();
-    Text text("C:/Windows/Fonts/arial.ttf", 18, width, height);
+    Text text;
+    text.init("C:/Windows/Fonts/arial.ttf", 18, width, height);
     SW_STOP(sw);
 
     // Load mesh into openGL
@@ -135,6 +136,7 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // d.draw(mvp);
+        glDepthFunc(GL_LESS);
         d[0].pre(mvp, position);
         for (int i = 0; i < TREES; ++i)
             d[i].draw();
@@ -150,8 +152,9 @@ int main()
             text.printf("x: %f, y: %f, z: %f, ", position.x, position.y, position.z);
             text.printf("speed: %f", speed);
 
-            textframe.start();
+            textframe.restart();
         }
+        glDepthFunc(GL_ALWAYS);
         text.draw();
 
         SDL_GL_SwapWindow(window);
@@ -159,7 +162,7 @@ int main()
         frame.restart();
     }
 
-    text.~Text();
+    text.deinit();
     deinitialize();
 
     return 0;
@@ -233,8 +236,13 @@ void initialize()
         die("glewInit: %s\n", glewGetErrorString(glewErr));
 
     glEnable(GL_DEBUG_OUTPUT);
+
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
+
     glDebugMessageCallback(glCallback, NULL);
 }
 
