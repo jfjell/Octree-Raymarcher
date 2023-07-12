@@ -52,7 +52,6 @@ void Mesh::bind()
         glGenBuffers(1, &this->ebo);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, this->indices.size() * sizeof(unsigned int), this->indices.data(), GL_STATIC_DRAW);
-
     }
 
     if (this->uvcoords.size()) // UV

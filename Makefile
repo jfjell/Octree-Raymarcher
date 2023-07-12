@@ -10,12 +10,14 @@ OBJFILES=$(subst src/,obj\,$(subst .cpp,.obj,$(CPPFILES)))
 !ENDIF
 !ENDIF
 
+MAKEFILE=Makefile
 CPP=cl
 LD=link
 CPPFLAGS=/Iinclude \
 	/DSDL_MAIN_HANDLED \
 	/D_CRT_SECURE_NO_WARNINGS \
 	/std:c++17 \
+	/Od \
 	/W4 \
 	/WX \
 	/EHsc \
@@ -37,7 +39,7 @@ clean:
 
 rebuild: clean all
 
-$(EXE): $(OBJFILES)
+$(EXE): $(OBJFILES) $(MAKEFILE)
 	$(LD) $(LDFLAGS) /out:$@ $(OBJFILES)
 
 {src\}.cpp{obj\}.obj:

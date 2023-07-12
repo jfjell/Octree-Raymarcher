@@ -1,13 +1,13 @@
 #version 430 core
 
 uniform mat4x4 mvp;
+uniform mat4x4 model;
 
 layout(location = 0) in vec3 vertexcoord;
-layout(location = 1) in vec2 uvcoord;
 
 layout(location = 0) out vec3 hitpos;
 
 void main(void) {
-	gl_Position = mvp * vec4(vertexcoord, 1.0);
-	hitpos = vertexcoord;
+	gl_Position = mvp * model * vec4(vertexcoord, 1.0);
+	hitpos = (model * vec4(vertexcoord, 1.0)).xyz;
 }

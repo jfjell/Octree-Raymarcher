@@ -106,7 +106,7 @@ int main()
     for (int i = 0; i < TREES; ++i)
         d[i].loadTree(&root[i]); 
     SW_STOP(sw);
-    print(&d[0].mesh);
+    // print(&d[0].mesh);
 
     // OpenGL, SDL, etc.
     SW_START(sw, "Initializing OpenGL and SDL");

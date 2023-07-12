@@ -58,11 +58,10 @@ struct OctreeCubemapDrawer
 
 struct ParallaxDrawer
 {
-    Mesh mesh;
     const Ocroot *root;
-    unsigned vao, shader, tex, ssboTree, ssboTwig, ssboBark;
-    int mvp, sampler, eye, wto;
-    int pos, size;
+    unsigned vao, vbo, ebo, shader, ssboTree, ssboTwig;
+    int mvp, sampler, eye, pos, size, model;
+    glm::mat4 srt;
 
     void destroy();
 
