@@ -44,4 +44,3 @@ $(EXE): $(OBJFILES) $(MAKEFILE)
 
 {src\}.cpp{obj\}.obj:
 	$(CPP) $(CPPFLAGS) /c /Fo:$@ $< 
-

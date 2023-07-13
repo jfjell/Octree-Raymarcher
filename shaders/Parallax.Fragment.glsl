@@ -105,16 +105,17 @@ Tree enclosingTree(vec3 p) {
 }
 
 bool raymarchTwig(uint index, vec3 a, vec3 b, vec3 cmin, float size, float leafsize, out float s, out Tree tree) {
-    float halfsize = size * 0.5;
     float t = 0.0;
     for (int stw = 0; stw < MAX_TWIG_STEPS; ++stw) {
         vec3 p = a + b * t;
+        if (!isInsideCube(p, cmin, cmin + size)) break;
+
         ivec3 off = ivec3((vec3(p - cmin) * (1.0 / leafsize))); // Integer coordinates
 
         if (!isInsideCube(off, vec3(0), vec3(TWIG_SIZE-1))) break;
 
         uint word = Twig_word(off.x, off.y, off.z);
-        vec3 leafmin = cmin + vec3(off) * leafsize;
+        vec3 leafmin = cmin + off * leafsize;
         vec3 leafmax = leafmin + leafsize;
 
         uint bark = Twig_SSBO[index + word];
@@ -174,7 +175,7 @@ const vec4 materialLookup[MATERIALS] = {
     vec4(0.2, 0.6, 0.4, 1), // Grass
 };
 
-void main(void) {
+void main() {
     Tree tree;
     vec3 beta = normalize(hitpos - eye);
     vec3 alpha = eye;
@@ -191,7 +192,6 @@ void main(void) {
 
     if (sigma < MAX_DIST) {
         vec3 point = alpha + beta * sigma;
-        gl_FragDepth = distance(point, eye) / MAX_DIST;
         // vec3 relative = (point - root.pos) / root.size;
         // vec3 texturecolor = texture(sampler, relative.xz).rgb;
         vec3 normal = cubeNormal(point, tree.pos, tree.pos + tree.size);
@@ -199,6 +199,9 @@ void main(void) {
         uint material = tree.index - 1;
         vec4 color = vec4(materialLookup[material].xyz + normal * 0.1, 1);
         gl_FragColor = color;
+
+        float depth = distance(point, eye) / MAX_DIST;
+        gl_FragDepth = depth;
     } else {
         discard;
     }

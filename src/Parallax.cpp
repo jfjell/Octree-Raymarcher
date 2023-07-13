@@ -8,6 +8,9 @@
 #include "Octree.h"
 #include "Shader.h"
 
+extern const float CUBE_VERTICES[8*3];
+extern const unsigned short CUBE_INDICES[6*6];
+
 const float CUBE_VERTICES[8*3] = {
     0., 0., 0., 
     1., 0., 0., 
