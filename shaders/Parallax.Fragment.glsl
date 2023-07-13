@@ -200,7 +200,10 @@ void main() {
         vec4 color = vec4(materialLookup[material].xyz + normal * 0.1, 1);
         gl_FragColor = color;
 
-        float depth = distance(point, eye) / MAX_DIST;
+        float z = 1.0 / distance(point, eye);
+        float near = 1.0 / 0.1;
+        float far = 1.0 / 10000.0;
+        float depth = (z - near) / (far - near);
         gl_FragDepth = depth;
     } else {
         discard;

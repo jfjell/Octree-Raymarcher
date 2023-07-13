@@ -82,7 +82,7 @@ int main()
 
 #define TREES_WIDTH 5
 #define TREES (TREES_WIDTH * TREES_WIDTH)
-    int depth = 7;
+    int depth = 8;
     int pyramidepth = 256;
     // Height pyramid for world gen
     SW_START(sw, "Generating bounded pyramid");
@@ -140,18 +140,20 @@ int main()
 
         computeMVP();
 
-        glClearColor(0.3f, 0.3f, 0.6f, 1.f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClearColor(0.f, 0.f, 0.f, 1.f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
         // d.draw(mvp);
         glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_LESS);
+        glEnable(GL_STENCIL_TEST);
+        glDepthFunc(GL_ALWAYS);
         d[0].pre(mvp, position);
         for (int i = 0; i < TREES; ++i)
             d[i].draw();
         d[0].post();
 
-        glDisable(GL_DEPTH_TEST);
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LESS);
         computeTarget(root);
         if (imag.real) imag.draw(mvp);
 
@@ -167,7 +169,7 @@ int main()
 
             textframe.restart();
         }
-        glDepthFunc(GL_ALWAYS);
+        glDisable(GL_DEPTH_TEST);
         text.draw();
 
         SDL_GL_SwapWindow(window);
@@ -280,7 +282,7 @@ bool twigmarch(vec3 a, vec3 b, vec3 bmin, float size, float leafsize, const Octw
         uint32_t word = Octwig::word(off.x, off.y, off.z);
         if (twig->leaf[word] != 0)
         {
-            *s = t - EPS;
+            *s = t;
             return true;
         }
         vec3 leafmin = bmin + vec3(off) * leafsize;
@@ -395,8 +397,8 @@ void initialize()
         die("IMG_Init: %s\n", IMG_GetError());
 
 
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
 
     window = SDL_CreateWindow(
         "Octree", 
@@ -424,6 +426,7 @@ void initialize()
         die("glewInit: %s\n", glewGetErrorString(glewErr));
 
     glEnable(GL_DEBUG_OUTPUT);
+    glDebugMessageCallback(glCallback, NULL);
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
@@ -431,7 +434,7 @@ void initialize()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
 
-    glDebugMessageCallback(glCallback, NULL);
+    glEnable(GL_STENCIL_TEST);
 }
 
 void deinitialize()

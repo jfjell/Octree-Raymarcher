@@ -58,7 +58,7 @@ void ImaginaryCube::deinit()
 
 void ImaginaryCube::position(vec3 bmid)
 {
-    this->bmin = bmid - (this->scale * 0.5f);
+    this->bmin = bmid - this->scale * 0.5f;
 }
 
 void ImaginaryCube::draw(mat4 mvp)
