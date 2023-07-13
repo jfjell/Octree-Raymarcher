@@ -358,11 +358,15 @@ bool chunkmarch(vec3 alpha, vec3 beta, const Ocroot *chunks, vec3 *sigma)
     for ( ; ; )
     {
         vec3 p = alpha + beta * t;
-        if (!isInsideCube(p, chmin, chmax)) return false;
+        if (!isInsideCube(p, chmin, chmax)) 
+            return false;
 
         ivec3 chi = (p - chmin) / chsize;
         int i = chi.x * TREES_WIDTH + chi.z;
-        if (i < 0 || i >= TREES) return false;
+        if (i < 0 || i >= TREES) 
+            return false;
+        if (!isInsideCube(p, chunks[i].position, chunks[i].position + chsize))
+            return false;
 
         float s = 0;
         if (treemarch(p, beta, &chunks[i], &s))
