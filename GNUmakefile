@@ -9,7 +9,9 @@ CLANG_CPPFLAGS=-Iinclude \
 	-DSDL_MAIN_HANDLED \
 	-D_CRT_SECURE_NO_WARNINGS \
 	-std=c++17 \
-	-O0 -g
+	-O0 \
+	-fno-exceptions \
+	-g
 CLANG_LDFLAGS=-Llib \
 	-lSDL2main \
 	-lSDL2 \

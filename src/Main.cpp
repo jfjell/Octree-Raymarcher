@@ -1,6 +1,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <vector>
+#include <algorithm>
 #include <windows.h>
 #include <GL/glew.h>
 #include <SDL2/SDL.h>
@@ -44,33 +45,15 @@ void initialize();
 void deinitialize();
 void initializeControls();
 void glCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *argp);
+float manhattanCube(vec3 p, vec3 bmin, vec3 bmax);
 
-bool isFile(const char *path)
-{
-    FILE *fp = fopen(path, "rb");
-    if (!fp) return false;
-    fclose(fp);
-    return true;
-}
-
-void makeTree(Ocroot *root, glm::vec3 pos, float size, int depth, BoundsPyramid *pyr)
-{
-    grow(root, pos, size, depth, pyr);
-
-    /*
-    char path[256] = {0};
-    sprintf(path, "%d.tree", depth);
-    if (isFile(path))
-    {
-        propagate(root, path);
-    }
-    else
-    {
-        grow(root, vec3(0, 0, 0), 128, depth, pyr);
-        pollinate(root, path);
-    }
-    */
-}
+#define TREES_X 7
+#define TREES_Z 7
+#define TREES_Y 5
+#define TREES_T (TREES_X * TREES_Y * TREES_Z)
+#define TREE_MAX_DEPTH 8
+#define TREE_SIZE 128
+#define PYRAMID_RESOLUTION 256
 
 int main() 
 {
@@ -80,26 +63,46 @@ int main()
 
     srand((unsigned int)time(NULL));
 
-#define TREES_WIDTH 5
-#define TREES (TREES_WIDTH * TREES_WIDTH)
-    int depth = 8;
-    int pyramidepth = 256;
-    // Height pyramid for world gen
-    SW_START(sw, "Generating bounded pyramid");
-    BoundsPyramid pyramid[TREES];
-    for (int i = 0; i < TREES_WIDTH; ++i)
-        for (int j = 0; j < TREES_WIDTH; ++j)
-            pyramid[i * TREES_WIDTH + j].init(pyramidepth, 16.0f, 1.0f / pyramidepth, (float)i*pyramidepth, 16.0f, (float)j*pyramidepth);
+    SW_START(sw, "Generating %d pyramids", TREES_Z * TREES_X);
+    BoundsPyramid pyramid[TREES_X * TREES_Z];
+    for (int z = 0; z < TREES_Z; ++z)
+    {
+        for (int x = 0; x < TREES_X; ++x)
+        {
+            int i = z * TREES_X + x;
+            float amplitude = 16.0f;
+            float period = 1.0f / PYRAMID_RESOLUTION;
+            float xshift = x * PYRAMID_RESOLUTION;
+            float yshift = 16.0f;
+            float zshift = z * PYRAMID_RESOLUTION;
+            pyramid[i].init(PYRAMID_RESOLUTION, amplitude, period, xshift, yshift, zshift);
+
+            printf("%d ", i);
+        }
+    }
+    putchar('\n');
     SW_STOP(sw);
     print(&pyramid[0]);
 
-#define TREE_SIZE 128
     // Tree
-    SW_START(sw, "Generating octree");
-    Ocroot root[TREES];
-    for (int i = 0; i < TREES_WIDTH; ++i)
-        for (int j = 0; j < TREES_WIDTH; ++j)
-        makeTree(&root[i * TREES_WIDTH + j], vec3(TREE_SIZE * i, 0.0, TREE_SIZE * j), TREE_SIZE, depth, &pyramid[i * TREES_WIDTH + j]);
+    SW_START(sw, "Generating %d octrees", TREES_T);
+    Ocroot root[TREES_T];
+    for (int z = 0; z < TREES_Z; ++z)
+    {
+        for (int y = 0; y < TREES_Y; ++y)
+        {
+            for (int x = 0; x < TREES_X; ++x)
+            {
+                int i = z * TREES_X * TREES_Y + y * TREES_X + x;
+                int j = z * TREES_X + x;
+                vec3 p = vec3(x * TREE_SIZE, (y - (TREES_Y / 2)) * TREE_SIZE, z * TREE_SIZE);
+                grow(&root[i], p, TREE_SIZE, TREE_MAX_DEPTH, &pyramid[j]);
+
+                printf("%d ", i);
+            }
+        }
+    }
+    putchar('\n');
     SW_STOP(sw);
 
     print(&root[0]);
@@ -108,8 +111,8 @@ int main()
     SW_START(sw, "Generating mesh");
     // OctreeCubefaceDrawer d;
     // OctreeCubemapDrawer d;
-    ParallaxDrawer d[TREES];
-    for (int i = 0; i < TREES; ++i)
+    ParallaxDrawer d[TREES_T];
+    for (int i = 0; i < TREES_T; ++i)
         d[i].loadTree(&root[i]); 
     SW_STOP(sw);
     // print(&d[0].mesh);
@@ -124,7 +127,7 @@ int main()
 
     // Load mesh into openGL
     SW_START(sw, "Uploading mesh to GPU");
-    for (int i = 0; i < TREES; ++i)
+    for (int i = 0; i < TREES_T; ++i)
         d[i].loadGL("textures/quad.png");
     SW_STOP(sw);
 
@@ -133,6 +136,10 @@ int main()
     Counter frame, textframe;
     textframe.start();
     frame.start();
+
+    int order[TREES_T];
+    for (int i = 0; i < TREES_T; ++i)
+        order[i] = -1;
 
     while (running) 
     {
@@ -143,19 +150,31 @@ int main()
         glClearColor(0.f, 0.f, 0.f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
+        for (int i = 0; i < TREES_T; ++i)
+            order[i] = i;
+
+        auto less = [&](int i, int j) -> bool {
+            float di = manhattanCube(position, root[i].position, root[i].position + root[i].size);
+            float dj = manhattanCube(position, root[j].position, root[j].position + root[j].size);
+            return di < dj;
+        };
+        std::sort(order, &order[TREES_T], less);
+
         // d.draw(mvp);
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_STENCIL_TEST);
         glDepthFunc(GL_ALWAYS);
         d[0].pre(mvp, position);
-        for (int i = 0; i < TREES; ++i)
-            d[i].draw();
+        for (int i = 0; i < TREES_T; ++i)
+            d[order[i]].draw();
         d[0].post();
 
+        glDisable(GL_STENCIL_TEST);
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LESS);
         computeTarget(root);
-        if (imag.real) imag.draw(mvp);
+        if (imag.real) 
+            imag.draw(mvp);
 
         if (textframe.elapsed() > 1. / 24)
         {
@@ -184,10 +203,16 @@ int main()
     return 0;
 }
 
+float manhattanCube(vec3 p, vec3 bmin, vec3 bmax)
+{
+    vec3 bmid = (bmax + bmin) * 0.5f;
+    return glm::distance(p, bmid);
+}
+
 void computeTarget(const Ocroot *chunks)
 {
     vec3 sigma = vec3(0);
-    imag.real = chunkmarch(position, direction, chunks, TREES, vec3(TREES_WIDTH, 0, 1), &sigma);
+    imag.real = chunkmarch(position, direction, chunks, TREES_T, vec3(1, TREES_X, TREES_Y * TREES_X), &sigma);
     imag.position(sigma);
 }
 
@@ -208,7 +233,7 @@ void computeMVP()
     const mat4 I = mat4(1.f);
     const mat4 T = I; 
     const mat4 S = I;
-    const mat4 R = glm::rotate(I, glm::radians(0.f), up);
+    const mat4 R = I;
     const mat4 SRT = T * S * R;
     const mat4 M = SRT;
     const mat4 P = glm::perspective(glm::radians(fov/2), (float)width / height, .1f, 10000.f);
@@ -220,6 +245,10 @@ void computeMVP()
 
 void initialize()
 {
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
     if (SDL_Init(SDL_INIT_EVERYTHING) < 0)
         die("SDL_Init: %s\n", SDL_GetError());
 
@@ -229,9 +258,9 @@ void initialize()
     if (IMG_Init(IMG_INIT_PNG) < 0)
         die("IMG_Init: %s\n", IMG_GetError());
 
-
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
     window = SDL_CreateWindow(
         "Octree", 
@@ -258,6 +287,14 @@ void initialize()
     if (glewErr != GLEW_OK)
         die("glewInit: %s\n", glewGetErrorString(glewErr));
 
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(glCallback, NULL);
 
@@ -268,6 +305,21 @@ void initialize()
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
 
     glEnable(GL_STENCIL_TEST);
+    glStencilMask(0xff);
+    glClearStencil(0);
+    glStencilFunc(GL_NOTEQUAL, 1, 0xff);
+    glStencilOp(GL_KEEP, GL_REPLACE, GL_REPLACE);
+
+    int bits = 0;
+    glGetIntegerv(GL_STENCIL_BITS, &bits);
+    printf("bits=%d\n", bits);
+    SDL_GL_GetAttribute(SDL_GL_STENCIL_SIZE, &bits);
+    printf("bits=%d\n", bits);
+    assert(bits == 8);
+    
+    int cl = 0;
+    glGetIntegerv(GL_STENCIL_CLEAR_VALUE, &cl);
+    assert(cl == 0);
 }
 
 void deinitialize()

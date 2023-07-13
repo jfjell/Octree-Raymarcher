@@ -50,7 +50,7 @@ bool twigmarch(vec3 a, vec3 b, vec3 bmin, float size, float leafsize, const Octw
 {
     vec3 bmax = bmin + size;
     float t = 0.0;
-    for ( ; ; )
+    for (int c = 0; c < 1000; ++c)
     {
         vec3 p = a + b * t;
         if (!isInsideCube(p, bmin, bmax)) return false;
@@ -67,6 +67,7 @@ bool twigmarch(vec3 a, vec3 b, vec3 bmin, float size, float leafsize, const Octw
         float escape = cubeEscapeDistance(p, b, leafmin, leafmax);
         t += escape + EPS;
     }
+    return false;
 }
 
 bool treemarch(vec3 a, vec3 b, const Ocroot *root, float *s)
@@ -74,7 +75,7 @@ bool treemarch(vec3 a, vec3 b, const Ocroot *root, float *s)
     vec3 rmin = root->position;
     vec3 rmax = root->position + root->size;
     float t = 0.0;
-    for ( ; ; )
+    for (int i = 0; i < 1000; ++i)
     {
         vec3 p = a + b * t;
         if (!isInsideCube(p, rmin, rmax)) return false;
@@ -107,6 +108,7 @@ bool treemarch(vec3 a, vec3 b, const Ocroot *root, float *s)
             assert(false);
         }
     }
+    return false;
 }
 
 float intersectCube(vec3 a, vec3 b, vec3 cmin, vec3 cmax, bool *intersect)
@@ -130,11 +132,11 @@ bool chunkmarch(vec3 alpha, vec3 beta, const Ocroot *chunk, size_t chunks, vec3 
     float t = 0.0f;
     bool intersect = true;
     if (!isInsideCube(alpha, chmin, chmax)) 
-        t = intersectCube(alpha, beta, chmin, chmax, &intersect);
+        t = intersectCube(alpha, beta, chmin, chmax, &intersect) + EPS;
     if (!intersect)
         return false;
 
-    for ( ; ; )
+    for (int c = 0; c < 1000; ++c)
     {
         vec3 p = alpha + beta * t;
         if (!isInsideCube(p, chmin, chmax)) 
@@ -160,4 +162,5 @@ bool chunkmarch(vec3 alpha, vec3 beta, const Ocroot *chunk, size_t chunks, vec3 
             t += escape + EPS;
         }
     }
+    return false;
 }
