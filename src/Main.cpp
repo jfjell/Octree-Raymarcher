@@ -20,6 +20,7 @@
 #include "Draw.h"
 #include "Debug.h"
 #include "ImaginaryCube.h"
+#include "Traverse.h"
 
 SDL_Window *window;
 SDL_GLContext glContext;
@@ -37,7 +38,6 @@ ImagCube imag;
 
 using glm::vec3;
 
-bool chunkmarch(vec3 alpha, vec3 beta, const Ocroot *chunks, vec3 *sigma);
 void computeTarget(const Ocroot *chunks);
 void computeMVP();
 void initialize();
@@ -187,7 +187,7 @@ int main()
 void computeTarget(const Ocroot *chunks)
 {
     vec3 sigma = vec3(0);
-    imag.real = chunkmarch(position, direction, chunks, &sigma);
+    imag.real = chunkmarch(position, direction, chunks, TREES, vec3(TREES_WIDTH, 0, 1), &sigma);
     imag.position(sigma);
 }
 
@@ -216,173 +216,6 @@ void computeMVP()
     const mat4 MVP = P * V * M;
 
     mvp = MVP;
-}
-
-using glm::vec3;
-using glm::bvec3;
-using glm::ivec3;
-using glm::greaterThanEqual;
-using glm::all;
-using glm::min;
-using glm::max;
-
-#define EPS (1.0f / 8192.0)
-
-struct Tree
-{
-    vec3     bmin;
-    float    size;
-    uint64_t offset;
-
-    Tree(vec3 p, float s, uint64_t i): bmin(p), size(s), offset(i) {}
-};
-
-bool isInsideCube(vec3 p, vec3 cmin, vec3 cmax) 
-{
-    bvec3 geq = greaterThanEqual(p, cmin);
-    bvec3 leq = greaterThanEqual(cmax, p);
-    return all(geq) && all(leq);
-}
-
-float cubeEscapeDistance(vec3 a, vec3 b, vec3 cmin, vec3 cmax) 
-{
-    vec3 gamma = vec3(1.0 / b.x, 1.0 / b.y, 1.0 / b.z);
-    vec3 tmin = (cmin - a) * gamma;
-    vec3 tmax = (cmax - a) * gamma;
-    vec3 t = max(tmin, tmax);
-    return min(t.x, min(t.y, t.z));
-}
-
-Tree traverse(vec3 p, const Ocroot *root)
-{
-    Tree t = Tree(root->position, root->size, 0);
-    for ( ; ; )
-    {
-        if (root->tree[t.offset].type() != BRANCH) return t;
-        float halfsize = t.size * 0.5f;
-        vec3 mid = t.bmin + halfsize;
-        bvec3 ge = greaterThanEqual(p, mid);
-        vec3 bmin = t.bmin + (vec3)ge * halfsize;
-        uint64_t i = Octree::branch(ge.x, ge.y, ge.z);
-        uint64_t next = root->tree[t.offset].offset() + i;
-        t = Tree(bmin, halfsize, next);
-    }
-}
-
-bool twigmarch(vec3 a, vec3 b, vec3 bmin, float size, float leafsize, const Octwig *twig, float *s)
-{
-    vec3 bmax = bmin + size;
-    float t = 0.0;
-    for ( ; ; )
-    {
-        vec3 p = a + b * t;
-        if (!isInsideCube(p, bmin, bmax)) return false;
-        ivec3 off = ivec3((p - bmin) / leafsize);
-        if (!isInsideCube(off, vec3(0), vec3(TWIG_SIZE-1))) return false;
-        uint32_t word = Octwig::word(off.x, off.y, off.z);
-        if (twig->leaf[word] != 0)
-        {
-            *s = t;
-            return true;
-        }
-        vec3 leafmin = bmin + vec3(off) * leafsize;
-        vec3 leafmax = leafmin + leafsize;
-        float escape = cubeEscapeDistance(p, b, leafmin, leafmax);
-        t += escape + EPS;
-    }
-}
-
-bool treemarch(vec3 a, vec3 b, const Ocroot *root, float *s)
-{
-    vec3 rmin = root->position;
-    vec3 rmax = root->position + root->size;
-    float t = 0.0;
-    for ( ; ; )
-    {
-        vec3 p = a + b * t;
-        if (!isInsideCube(p, rmin, rmax)) return false;
-
-        Tree tree = traverse(p, root);
-        uint32_t type = root->tree[tree.offset].type();
-        if (type == EMPTY)
-        {
-            float escape = cubeEscapeDistance(p, b, tree.bmin, tree.bmin + tree.size);
-            t += escape + EPS;
-        }
-        else if (type == LEAF)
-        {
-            *s = t - EPS;
-            return true;
-        }
-        else if (type == TWIG)
-        {
-            float leafsize = tree.size / (1 << TWIG_LEVELS);
-            if (twigmarch(p, b, tree.bmin, tree.size, leafsize, &root->twig[root->tree[tree.offset].offset()], s))
-            {
-                *s += t;
-                return true;
-            }
-            float escape = cubeEscapeDistance(p, b, tree.bmin, tree.bmin + tree.size);
-            t += escape + EPS;
-        }
-        else
-        {
-            assert(false);
-        }
-    }
-}
-
-float intersectCube(vec3 a, vec3 b, vec3 cmin, vec3 cmax, bool *intersect)
-{
-    vec3 tmin = (cmin - a) / b;
-    vec3 tmax = (cmax - a) / b;
-    vec3 t1 = min(tmin, tmax);
-    vec3 t2 = max(tmin, tmax);
-    float tnear = max(max(t1.x, t1.y), t1.z);
-    float tfar = min(min(t2.x, t2.y), t2.z);
-    *intersect = tfar > tnear;
-    return tnear;
-}
-
-bool chunkmarch(vec3 alpha, vec3 beta, const Ocroot *chunks, vec3 *sigma)
-{
-    float chsize = TREE_SIZE;
-    vec3 chmin = chunks[0].position;
-    vec3 chmax = chunks[TREES-1].position + chsize;
-
-    float t = 0.0f;
-    bool intersect = true;
-    if (!isInsideCube(alpha, chmin, chmax)) 
-        t = intersectCube(alpha, beta, chmin, chmax, &intersect);
-    if (!intersect)
-        return false;
-
-    for ( ; ; )
-    {
-        vec3 p = alpha + beta * t;
-        if (!isInsideCube(p, chmin, chmax)) 
-            return false;
-
-        ivec3 chi = (p - chmin) / chsize;
-        int i = chi.x * TREES_WIDTH + chi.z;
-        if (i < 0 || i >= TREES) 
-            return false;
-        if (!isInsideCube(p, chunks[i].position, chunks[i].position + chsize))
-            return false;
-
-        float s = 0;
-        if (treemarch(p, beta, &chunks[i], &s))
-        {
-            t += s;
-            *sigma = alpha + beta * t;
-            return true;
-        }
-        else
-        {
-            float escape = cubeEscapeDistance(p, beta, chunks[i].position, chunks[i].position + chsize);
-            t += escape + EPS;
-        }
-    }
 }
 
 void initialize()
