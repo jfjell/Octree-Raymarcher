@@ -9,12 +9,14 @@ def bits_of_bricks(levels):
     return int(8**levels * 2 * 8)
 
 CHILDREN = 4
-COLUMNS = '{: >20}' * 4
+COLUMNS = '{: >16}' * 5
 
-print(COLUMNS.format('Levels', 'Trees', 'Bricks', 'Ratio'))
-for level in range(1, 10):
+print(COLUMNS.format('Levels', 'Trees', 'Bricks', 'Ratio', 'Ratio (brick-1)'))
+for level in range(1, 7):
     node = bits_of_nodes(level, CHILDREN)
     brick = bits_of_bricks(level)
-    ratio = brick / node
-    print(COLUMNS.format(level, node, brick, ratio))
+    ratio = round(brick / node, 3)
+    nodeprevbrick = 32 * 8 + CHILDREN * bits_of_bricks(level-1)
+    prevratio = round(brick / nodeprevbrick, 3)
+    print(COLUMNS.format(level, node, brick, ratio, prevratio))
 print('')

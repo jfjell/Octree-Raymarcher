@@ -8,14 +8,17 @@
 #include "Text.h"
 #include "Shader.h"
 
-const float QUAD_VERTICES[] = {
+extern const float QUAD_VERTICES[8];
+extern const unsigned short QUAD_INDICES[6];
+
+const float QUAD_VERTICES[8] = {
     -1.0, +1.0, // SW
     +1.0, +1.0, // SE
     +1.0, -1.0, // NE
     -1.0, -1.0, // NW
 };
 
-const unsigned short QUAD_INDICES[] = {
+const unsigned short QUAD_INDICES[6] = {
     0, 1, 2, // /.
     2, 3, 0, // ./
 };

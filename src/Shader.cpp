@@ -1,17 +1,27 @@
 #include <assert.h>
+#include <string.h>
+#include <ctype.h>
 #include <GL/glew.h>
+#include <unordered_map>
 #include "Shader.h"
 #include "Util.h"
 
-Shader Shader::compile(const char *path, unsigned int type)
+Shader& Shader::compile(const char *path, unsigned int type)
 {
     assert(this->program != 0);
 
     char *glss = readfile(path);
 
+    int segments = 2 + (int)includes.size();
+    const char **segment = new const char*[segments];
+    segment[0] = "#version 430 core\n";
+    for (int i = 0; i < (int)includes.size(); ++i)
+        segment[i+1] = includes[i].c_str();
+    segment[segments-1] = glss;
+
     unsigned int shader = glCreateShader(type);
     assert(shader != 0);
-    glShaderSource(shader, 1, &glss, 0);
+    glShaderSource(shader, segments, segment, 0);
     glCompileShader(shader);
 
     int compiled = 0;
@@ -27,18 +37,21 @@ Shader Shader::compile(const char *path, unsigned int type)
     }
     glAttachShader(this->program, shader);
 
+    delete[] segment;
     delete[] glss;
     glDeleteShader(shader);
+
+    includes.clear();
 
     return *this;
 }
 
-Shader Shader::vertex(const char *path)
+Shader& Shader::vertex(const char *path)
 {
     return this->compile(path, GL_VERTEX_SHADER);
 }
 
-Shader Shader::fragment(const char *path)
+Shader& Shader::fragment(const char *path)
 {
     return this->compile(path, GL_FRAGMENT_SHADER);
 }
@@ -62,4 +75,12 @@ unsigned int Shader::link()
     }
 
     return this->program;
+}
+
+Shader& Shader::include(const char *path)
+{
+    char *glss = readfile(path);
+    includes.push_back(std::string(glss));
+    delete[] glss;
+    return *this;
 }

@@ -1,4 +1,3 @@
-#version 430 core
 
 #define EPS (1.0 / 64.0)
 

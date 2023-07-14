@@ -72,6 +72,7 @@ void ParallaxDrawer::loadGL(const char *texture)
     // Shader
     this->shader = Shader(glCreateProgram())
         .vertex("shaders/Parallax.Vertex.glsl")
+        .include("shaders/Raymarch.glsl")
         .fragment("shaders/Parallax.Fragment.glsl")
         .link();
 

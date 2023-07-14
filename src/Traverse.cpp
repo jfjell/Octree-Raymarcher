@@ -4,7 +4,7 @@
 #include "Octree.h"
 
 
-#define EPS (1.0f / 8192.0)
+#define EPS (1.0f / 8192.0f)
 
 using glm::vec3;
 using glm::bvec3;

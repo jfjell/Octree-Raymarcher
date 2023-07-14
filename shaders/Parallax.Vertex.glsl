@@ -1,4 +1,3 @@
-#version 430 core
 
 uniform mat4x4 mvp;
 uniform mat4x4 model;
