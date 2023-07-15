@@ -69,17 +69,16 @@ void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsP
     using std::queue;
 
     root->position = position;
-    root->density  = 0;
     root->size     = size;
     root->depth    = depth;
 
-    uint64_t allocatedTrees = 16; 
+    root->treestoragesize = 16; 
     root->trees = 1; 
-    root->tree  = (Octree *)malloc(allocatedTrees * sizeof(Octree));
+    root->tree  = (Octree *)malloc(root->treestoragesize * sizeof(Octree));
 
-    uint64_t allocatedTwigs = 16;
+    root->twigstoragesize = 16;
     root->twigs = 0;
-    root->twig  = (Octwig *)malloc(allocatedTwigs * sizeof(Octwig));
+    root->twig  = (Octwig *)malloc(root->twigstoragesize * sizeof(Octwig));
 
     struct Ocentry
     {
@@ -140,8 +139,8 @@ void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsP
                     }
                 }
             }
-            if (root->twigs >= allocatedTwigs)
-                root->twig = (Octwig *)realloc(root->twig, (allocatedTwigs *= 2) * sizeof(Octwig));
+            if (root->twigs >= root->twigstoragesize)
+                root->twig = (Octwig *)realloc(root->twig, (root->twigstoragesize *= 2) * sizeof(Octwig));
             uint64_t offset = root->twigs++;
             root->tree[t.offset] = Octree(TWIG, (uint32_t)offset);
             root->twig[offset] = twig;
@@ -151,8 +150,8 @@ void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsP
             // Must be a branch => make 8 children and add them to the queue
             assert(high >= t.pos.y && low <= t.pos.y + t.size);
 
-            if (root->trees >= allocatedTrees + 8)
-                root->tree = (Octree *)realloc(root->tree, (allocatedTrees *= 2) * sizeof(Octree));
+            if (root->trees+8 >= root->treestoragesize)
+                root->tree = (Octree *)realloc(root->tree, (root->treestoragesize *= 2) * sizeof(Octree));
             
             uint64_t offset = root->trees;
 
@@ -167,9 +166,6 @@ void grow(Ocroot *root, vec3 position, float size, uint32_t depth, const BoundsP
             root->tree[t.offset] = Octree(BRANCH, (uint32_t)offset);
         }
     }
-
-    root->tree = (Octree *)realloc(root->tree, root->trees * sizeof(Octree));
-    root->twig = (Octwig *)realloc(root->twig, root->twigs * sizeof(Octwig));
 }
 
 #define TREE_STRUCT_SIZE (sizeof(Ocroot) - sizeof(void *) * 2)
@@ -197,6 +193,7 @@ void Ocroot::read(const char *path)
     fclose(fp);
 }
 
+
 static void axe(Ocroot *root, 
     uint64_t offset, 
     vec3 bmin, 
@@ -204,13 +201,12 @@ static void axe(Ocroot *root,
     size_t depth, 
     vec3 cmin, 
     vec3 cmax,
-    size_t &treeA,
-    size_t &twigA,
-    size_t &treeL,
-    size_t &treeR,
-    size_t &twigL,
-    size_t &twigR)
+    Ocaxe *tree,
+    Ocaxe *twig)
 {
+    using glm::min;
+    using glm::max;
+
     vec3 bmax = bmin + size;
 
     if (!cubesIntersect(bmin, bmax, cmin, cmax))
@@ -218,9 +214,13 @@ static void axe(Ocroot *root,
 
     Octree t = root->tree[offset];
     if (t.type() == EMPTY)
+    {
         return;
+    }
     else if (cubeIsInside(cmin, cmax, bmin, bmax))
     {
+        tree->left = min(tree->left, offset);
+        tree->right = max(tree->right, offset+1);
         root->tree[offset] = Octree(EMPTY, 0);
     }
     else if (t.type() == LEAF)
@@ -228,35 +228,51 @@ static void axe(Ocroot *root,
         if (depth == root->depth - TWIG_LEVELS)
         {
             // At max depth => make a twig
-            if (root->twigs >= twigA)
-                root->twig = (Octwig *)realloc(root->twig, (twigA += 8) * sizeof(Octwig));
+            if (root->twigs >= root->twigstoragesize)
+            {
+                root->twig = (Octwig *)realloc(root->twig, (root->twigstoragesize *= 2) * sizeof(Octwig));
+                twig->realloc = true;
+            }
 
-            uint32_t pos = root->twigs++; 
-            root->twig[pos]= Octwig((uint16_t)t.offset());
+            size_t pos = root->twigs++; 
+            
+            twig->left = min(twig->left, pos);
+            twig->right = max(twig->right, pos+1);
+            root->twig[pos] = Octwig((uint16_t)t.offset());
+
+            tree->left = min(tree->left, offset);
+            tree->right = max(tree->right, offset+1);
             root->tree[offset] = Octree(TWIG, pos);
 
-            axe(root, offset, bmin, size, depth, cmin, cmax, treeA, twigA, treeL, treeR, twigL, twigR);
+            axe(root, offset, bmin, size, depth, cmin, cmax, tree, twig);
         }
         else
         {
             // Make 8 leaf children and check recursively
-            if (root->trees >= treeA)
-                root->tree = (Octree *)realloc(root->tree, (treeA += 64) * sizeof(Octree));
+            if (root->trees+8 >= root->treestoragesize)
+            {
+                root->tree = (Octree *)realloc(root->tree, (root->treestoragesize *= 2) * sizeof(Octree));
+                tree->realloc = true;
+            }
 
-            uint32_t pos = root->trees; 
+            size_t pos = root->trees; 
+            tree->left = min(tree->left, offset);
             root->tree[offset] = Octree(BRANCH, pos);
 
+            tree->right = max(tree->right, pos + 7 + 1);
             for (size_t i = 0; i < 8; ++i)
                 root->tree[pos + i] = Octree(LEAF, t.offset());
 
             root->trees += 8;
 
-            axe(root, offset, bmin, size, depth, cmin, cmax, treeA, twigA, treeL, treeR, twigL, twigR);
+            axe(root, offset, bmin, size, depth, cmin, cmax, tree, twig);
         }
     }
     else if (t.type() == TWIG)
     {
         float leafsize = size / (1 << TWIG_LEVELS);
+        twig->left = min(twig->left, t.offset());
+        twig->right = max(twig->right, t.offset()+1);
         for (size_t z = 0; z < TWIG_SIZE; ++z)
         {
             for (size_t y = 0; y < TWIG_SIZE; ++y)
@@ -274,13 +290,13 @@ static void axe(Ocroot *root,
     }
     else if (t.type() == BRANCH)
     {
+        float halfsize = size * 0.5;
         for (size_t i = 0; i < 8; ++i)
         {
             bool xg, yg, zg;
             Octree::cut(i, &xg, &yg, &zg);
-            float halfsize = size * 0.5;
             vec3 nextmin = bmin + vec3(xg, yg, zg) * halfsize;
-            axe(root, t.offset() + i, nextmin, halfsize, depth+1, cmin, cmax, treeA, twigA, treeL, treeR, twigL, twigR);
+            axe(root, t.offset() + i, nextmin, halfsize, depth+1, cmin, cmax, tree, twig);
         }
     }
     else
@@ -289,14 +305,11 @@ static void axe(Ocroot *root,
     }
 }
 
-void Ocroot::axeCube(glm::vec3 cmin, glm::vec3 cmax)
+void Ocroot::axeCube(glm::vec3 cmin, glm::vec3 cmax, Ocaxe *treeAxe, Ocaxe *twigAxe)
 {
-    size_t treeA = trees, twigA = twigs;
-    size_t treeL = 0, treeR = 0;
-    size_t twigL = 0, twigR = 0;
-    axe(this, 0, position, size, 0, cmin, cmax, treeA, twigA, treeL, treeR, twigL, twigR);
-    tree = (Octree *)realloc(tree, trees * sizeof(Octree));
-    twig = (Octwig *)realloc(twig, twigs * sizeof(Octwig));
+    *treeAxe = Ocaxe(SIZE_MAX, 0, false);
+    *twigAxe = Ocaxe(SIZE_MAX, 0, false);
+    axe(this, 0, position, size, 0, cmin, cmax, treeAxe, twigAxe);
 }
 
 void Ocroot::incLOD()

@@ -118,7 +118,7 @@ static void printTree(const Ocroot *r, uint32_t t)
 
 struct MinMax { uint32_t min, max; };
 
-static void popMM(MinMax *mm, const Ocroot *root, uint32_t index, int depth)
+void popMM(MinMax *mm, const Ocroot *root, uint32_t index, int depth)
 {
     if (mm[depth].min == (uint32_t)~0 || mm[depth].min > index) mm[depth].min = index;
     if (mm[depth].max == (uint32_t)~0 || mm[depth].max < index) mm[depth].max = index;
@@ -133,19 +133,28 @@ void print(const Ocroot *root)
     printf("[Ocroot]\n");
     printf("Position: %f,%f,%f\n", root->position.x, root->position.y, root->position.z);
     printf("Size: %f\n", root->size);
-    printf("Density: %f\n", root->density);
     printf("Depth: %d\n", root->depth);
     printf("#Trees: %llu\n", root->trees);
+    printf("#Allocated trees: %llu\n", root->treestoragesize);
     printf("#Bricks: %llu\n", root->twigs);
+    printf("#Allocated bricks: %llu\n", root->twigstoragesize);
+    printf("Tree utilization: %f%%\n", (double)root->trees * 100.0 / root->treestoragesize);
+    printf("Brick utilization: %f%%\n", (double)root->twigs * 100.0 / root->twigstoragesize);
 
-    printf("Used %f%% of tree address space!\n", 100.f * (float)root->trees / (double)(uint32_t)~(3 << 30));
-    printf("Used %f%% of brick address space!\n", 100.f * (float)root->twigs / (double)(uint32_t)~(3 << 30));
+    // printf("Used %f%% of tree address space!\n", 100.f * (float)root->trees / (double)(uint32_t)~(3 << 30));
+    // printf("Used %f%% of brick address space!\n", 100.f * (float)root->twigs / (double)(uint32_t)~(3 << 30));
     
-    S("Memory: ");
+    S("Optimal memory: ");
     printsize(root->trees * sizeof(Octree) + root->twigs * sizeof(Octwig));
 
     C('\n');
 
+    S("Real memory: ");
+    printsize(root->treestoragesize * sizeof(Octree) + root->twigstoragesize * sizeof(Octwig));
+
+    C('\n');
+
+    /*
 #define MAXLVLS 32
     MinMax mm[MAXLVLS];
     for (int i = 0; i < MAXLVLS; ++i)
@@ -157,6 +166,7 @@ void print(const Ocroot *root)
 
     for (int i = 0; i < MAXLVLS && mm[i].min != (uint32_t)~0; ++i)
         printf("Depth %d: [%u, %u]\n", i, mm[i].min, mm[i].max);
+    */
 
 
     // printTree(root, 0);

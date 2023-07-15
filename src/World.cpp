@@ -81,7 +81,7 @@ void World::gpu()
     for (int i = 0; i < volume; ++i)
     {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbotree[i]);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].trees * sizeof(Octree), chunk[i].tree, GL_STATIC_DRAW); 
+        glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].treestoragesize * sizeof(Octree), chunk[i].tree, GL_STATIC_DRAW); 
         // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssbotree[i]);
     }
 
@@ -90,7 +90,7 @@ void World::gpu()
     for (int i = 0; i < volume; ++i)
     {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbotwig[i]);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].twigs * sizeof(Octwig), chunk[i].twig, GL_STATIC_DRAW); 
+        glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].twigstoragesize * sizeof(Octwig), chunk[i].twig, GL_STATIC_DRAW); 
         // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssbotwig[i]);
     }
 
@@ -232,13 +232,35 @@ void World::draw(glm::mat4 mvp, glm::vec3 eye)
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
-void World::mod(int i)
+void World::mod(int i, const Ocaxe *tree, const Ocaxe *twig)
 {
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbotree[i]);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].trees * sizeof(Octree), chunk[i].tree, GL_STATIC_DRAW); 
+    if (tree->left < tree->right)
+    {
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbotree[i]);
+        if (tree->realloc)
+            glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].treestoragesize * sizeof(Octree), chunk[i].tree, GL_STATIC_DRAW); 
+        else
+        {
+            size_t offset = tree->left * sizeof(Octree);
+            size_t size = (tree->right - tree->left) * sizeof(Octree);
+            void *pointer = &chunk[i].tree[tree->left];
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, size, pointer);
+        }
+    }
 
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbotwig[i]);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].twigs * sizeof(Octwig), chunk[i].twig, GL_STATIC_DRAW); 
+    if (twig->left < twig->right)
+    {
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbotwig[i]);
+        if (twig->realloc)
+            glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].twigstoragesize * sizeof(Octwig), chunk[i].twig, GL_STATIC_DRAW); 
+        else
+        {
+            size_t offset = twig->left * sizeof(Octwig);
+            size_t size = (twig->right - twig->left) * sizeof(Octwig);
+            void *pointer = &chunk[i].twig[twig->left];
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, size, pointer);
+        }
+    }
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }

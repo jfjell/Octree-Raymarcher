@@ -74,6 +74,7 @@ int main()
     imag.init(1.0);
 
     world.init(TREES_X, TREES_Y, TREES_Z);
+    print(&world.chunk[0]);
     world.gpu();
 
     gbuffer.init(width, height);
@@ -190,14 +191,14 @@ void destroy()
                 vec3 bmin = wmin + vec3(x, y, z) * size;
                 vec3 bmax = bmin + size;
                 if (!cubesIntersect(cmin, cmax, bmin, bmax)) continue;
-                world.chunk[i].axeCube(cmin, cmax);
-                world.mod(i);
+                Ocaxe tree, twig;
+                world.chunk[i].axeCube(cmin, cmax, &tree, &twig);
+                world.mod(i, &tree, &twig);
             }
         }
     }
 
 }
-
 
 void computeMVP()
 {
@@ -311,6 +312,7 @@ void initializeControls()
     input.bindKey('d', [&]() { position += right * speed; });
     input.bindKey('x', [&]() { destroy(); });
     input.bindKey('+', [&]() { imag.scale += 0.5; });
+    input.bindKey('-', [&]() { imag.scale = glm::max(imag.scale - 0.5f, 0.0f); });
     input.bindKey(SDLK_SPACE, [&]() { position += glm::vec3(0.f, 1.f, 0.f) * speed; });
     input.bindKey(SDLK_LSHIFT, [&]() { position -= glm::vec3(0.f, 1.f, 0.f) * speed; });
     input.bindKey(SDLK_ESCAPE, [&]() { running = false; });

@@ -43,14 +43,25 @@ struct Octwig
 
 static_assert(sizeof(Octwig) == (1 << (TWIG_LEVELS * 3)) * sizeof(uint16_t));
 
+struct Ocaxe
+{
+    size_t left;
+    size_t right;
+    bool realloc;
+
+    Ocaxe() = default;
+    Ocaxe(size_t l, size_t r, bool a): left(l), right(r), realloc(a) {}
+};
+
 struct Ocroot
 {
     glm::vec3 position;
     float     size;
-    float     density;
     uint32_t  depth;
     uint64_t  trees;
     uint64_t  twigs;
+    uint64_t  treestoragesize;
+    uint64_t  twigstoragesize;
     Octree   *tree;
     Octwig   *twig;
 
@@ -58,7 +69,7 @@ struct Ocroot
     void read(const char *path);
     void incLOD();
     void decLOD();
-    void axeCube(glm::vec3 cmin, glm::vec3 cmax);
+    void axeCube(glm::vec3 cmin, glm::vec3 cmax, Ocaxe *treeAxe, Ocaxe *twigAxe);
 };
 
 struct BoundsPyramid;
