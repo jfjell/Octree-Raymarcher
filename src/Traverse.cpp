@@ -164,3 +164,17 @@ bool chunkmarch(vec3 alpha, vec3 beta, const Ocroot *chunk, size_t chunks, vec3 
     }
     return false;
 }
+
+bool cubesIntersect(vec3 bmin0, vec3 bmax0, vec3 bmin1, vec3 bmax1)
+{
+    using glm::all; 
+    using glm::greaterThanEqual;
+    return all(greaterThanEqual(bmax0, bmin1)) && all(greaterThanEqual(bmax1, bmin0));
+}
+
+bool cubeIsInside(glm::vec3 omin, glm::vec3 omax, glm::vec3 imin, glm::vec3 imax)
+{
+    using glm::all; 
+    using glm::greaterThanEqual;
+    return all(greaterThanEqual(imin, omin)) && all(greaterThanEqual(omax, imax));
+}

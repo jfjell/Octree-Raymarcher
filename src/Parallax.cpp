@@ -108,12 +108,12 @@ void ParallaxDrawer::loadGL(const char *texture)
     glGenBuffers(1, &ssboTree);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboTree);
     glBufferData(GL_SHADER_STORAGE_BUFFER, root->trees * sizeof(Octree), root->tree, GL_STATIC_DRAW); 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboTree);
+    // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboTree);
 
     glGenBuffers(1, &ssboTwig);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboTwig);
     glBufferData(GL_SHADER_STORAGE_BUFFER, root->twigs * sizeof(Octwig), root->twig, GL_STATIC_DRAW); 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssboTwig);
+    // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssboTwig);
 
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);

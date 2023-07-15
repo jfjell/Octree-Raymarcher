@@ -20,6 +20,8 @@ struct Tree
 bool isInsideCube(glm::vec3 p, glm::vec3 cmin, glm::vec3 cmax);
 float cubeEscapeDistance(glm::vec3 a, glm::vec3 b, glm::vec3 cmin, glm::vec3 cmax);
 float intersectCube(glm::vec3 a, glm::vec3 b, glm::vec3 cmin, glm::vec3 cmax, bool *intersect);
+bool cubesIntersect(glm::vec3 bmin0, glm::vec3 bmax0, glm::vec3 bmin1, glm::vec3 bmax1);
+bool cubeIsInside(glm::vec3 omin, glm::vec3 omax, glm::vec3 imin, glm::vec3 imax);
 
 Tree traverse(glm::vec3 p, const Ocroot *root);
 bool twigmarch(glm::vec3 a, glm::vec3 b, glm::vec3 bmin, float size, float leafsize, const Octwig *twig, float *s);

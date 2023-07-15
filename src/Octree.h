@@ -36,6 +36,9 @@ struct Octwig
     uint16_t leaf[TWIG_WORDS];
 
     static unsigned word(unsigned x, unsigned y, unsigned z);
+
+    Octwig() = default;
+    explicit Octwig(uint16_t v);
 };
 
 static_assert(sizeof(Octwig) == (1 << (TWIG_LEVELS * 3)) * sizeof(uint16_t));
@@ -50,19 +53,17 @@ struct Ocroot
     uint64_t  twigs;
     Octree   *tree;
     Octwig   *twig;
+
+    void write(const char *path);
+    void read(const char *path);
+    void incLOD();
+    void decLOD();
+    void axeCube(glm::vec3 cmin, glm::vec3 cmax);
 };
 
 struct BoundsPyramid;
 
 // Generate
 void grow(Ocroot *root, glm::vec3 position, float size, uint32_t depth, const BoundsPyramid *pyr);
-// Write to a file
-void pollinate(const Ocroot *root, const char *path); // Write to file
-// Read from a file
-void propagate(Ocroot *root, const char *path); 
-// Remove the lowest level
-void trim(Ocroot *root);
-// Opposite of trim
-void fertilize(Ocroot *root, const BoundsPyramid *pyr);
 
 #endif

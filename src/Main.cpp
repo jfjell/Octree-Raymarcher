@@ -24,6 +24,7 @@
 #include "Traverse.h"
 #include "GBuffer.h"
 #include "Shader.h"
+#include "World.h"
 
 SDL_Window *window;
 SDL_GLContext glContext;
@@ -38,18 +39,19 @@ glm::vec3 direction, right, up;
 glm::mat4 mvp;
 Input input;
 ImagCube imag;
+Text text;
+World world;
+GBuffer gbuffer;
 Counter sw;
 
 using glm::vec3;
 
-bool cullAngle(vec3 alpha, vec3 beta, vec3 bmin, vec3 bmax);
-void computeTarget(const Ocroot *chunks);
+void computeTarget(const World *world);
 void computeMVP();
 void initialize();
 void deinitialize();
 void initializeControls();
 void glCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *argp);
-float manhattanCube(vec3 p, vec3 bmin, vec3 bmax);
 
 #define TREES_X 3
 #define TREES_Z 3
@@ -59,50 +61,21 @@ float manhattanCube(vec3 p, vec3 bmin, vec3 bmax);
 #define TREE_SIZE 128
 #define PYRAMID_RESOLUTION 64
 
-void generateWorld(Ocroot *root, BoundsPyramid *pyramid);
-
 int main() 
 {
     using glm::vec3;
 
-    srand((unsigned int)time(NULL));
-
-    BoundsPyramid pyramid[TREES_X * TREES_Z];
-    Ocroot root[TREES_T];
-    generateWorld(root, pyramid);
-
-    // Mesh
-    SW_START(sw, "Generating mesh");
-    ParallaxDrawer d[TREES_T];
-    for (int i = 0; i < TREES_T; ++i)
-        d[i].loadTree(&root[i]); 
-    SW_STOP(sw);
-
-    // OpenGL, SDL, etc.
-    SW_START(sw, "Initializing OpenGL and SDL");
     initialize();
-    initializeControls();
-    Text text;
-    text.init("C:/Windows/Fonts/arial.ttf", 18, width, height);
-    SW_STOP(sw);
 
-    // Load mesh into openGL
-    SW_START(sw, "Uploading mesh to GPU");
-    for (int i = 0; i < TREES_T; ++i)
-        d[i].loadGL("textures/quad.png");
-    SW_STOP(sw);
+    initializeControls();
+
+    text.init("C:/Windows/Fonts/arial.ttf", 18, width, height);
 
     imag.init(1.0);
 
-    Counter frame, textframe;
-    textframe.start();
-    frame.start();
+    world.init(TREES_X, TREES_Y, TREES_Z);
+    world.gpu();
 
-    int order[TREES_T];
-    for (int i = 0; i < TREES_T; ++i)
-        order[i] = -1;
-
-    GBuffer gbuffer;
     gbuffer.init(width, height);
 
     gbuffer.enable();
@@ -125,9 +98,12 @@ int main()
     int sbits = 0;
     glGetIntegerv(GL_STENCIL_BITS, &sbits);
     // assert(sbits > 0);
-    printf("sbits=%d\n", sbits);
 
     gbuffer.disable();
+
+    Counter frame, textframe;
+    textframe.start();
+    frame.start();
 
     while (running) 
     {
@@ -143,34 +119,15 @@ int main()
         glClearColor(1.f, 1.f, 1.f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-        for (int i = 0; i < TREES_T; ++i)
-            order[i] = i;
-
-        auto less = [&](int i, int j) -> bool {
-            float di = manhattanCube(position, root[i].position, root[i].position + root[i].size);
-            float dj = manhattanCube(position, root[j].position, root[j].position + root[j].size);
-            return di < dj;
-        };
-        std::sort(order, &order[TREES_T], less);
-
-        glEnable(GL_CULL_FACE);
-        glDisable(GL_DEPTH_TEST);
-        glEnable(GL_STENCIL_TEST);
-        glDepthFunc(GL_ALWAYS);
-        d[0].pre(mvp, position);
         int culled = 0;
-        for (int i = 0; i < TREES_T; ++i)
-        {
-            int j = order[i];
-            d[j].draw();
-        }
-        d[0].post();
+        world.draw(mvp, position);
 
         glDisable(GL_CULL_FACE);
         glDisable(GL_STENCIL_TEST);
         glEnable(GL_DEPTH_TEST);
+        glEnable(GL_BLEND);
         glDepthFunc(GL_LESS);
-        computeTarget(root);
+        computeTarget(&world);
         if (imag.real) 
             imag.draw(mvp);
 
@@ -198,6 +155,7 @@ int main()
         frame.restart();
     }
 
+    world.deinit();
     gbuffer.deinit();
     imag.deinit();
     text.deinit();
@@ -206,78 +164,40 @@ int main()
     return 0;
 }
 
-void generateWorld(Ocroot *root, BoundsPyramid *pyramid)
+void computeTarget(const World *world)
 {
-    SW_START(sw, "Generating %d pyramids", TREES_Z * TREES_X);
-    for (int z = 0; z < TREES_Z; ++z)
-    {
-        for (int x = 0; x < TREES_X; ++x)
-        {
-            int i = z * TREES_X + x;
-            float amplitude = 16;
-            float period = 1.0f / PYRAMID_RESOLUTION;
-            float xshift = (float)x * PYRAMID_RESOLUTION;
-            float yshift = 16.0f;
-            float zshift = (float)z * PYRAMID_RESOLUTION;
-            pyramid[i].init(PYRAMID_RESOLUTION, amplitude, period, xshift, yshift, zshift);
+    vec3 sigma = vec3(0);
+    imag.real = chunkmarch(position, direction, world->chunk, world->volume, vec3(1, world->width, world->width * world->height), &sigma);
+    imag.position(sigma);
+}
 
-            printf("%d ", i);
-        }
-    }
-    putchar('\n');
-    SW_STOP(sw);
-    print(&pyramid[0]);
+void destroy()
+{
+    if (!imag.real) return;
 
-    // Tree
-    SW_START(sw, "Generating %d octrees", TREES_T);
-    for (int z = 0; z < TREES_Z; ++z)
+    float size = world.chunk[0].size;
+    vec3 wmin = world.chunk[0].position;
+
+    vec3 cmin = imag.bmin;
+    vec3 cmax = cmin + imag.scale;
+
+    for (int z = 0, i = 0; z < world.depth; ++z)
     {
-        for (int y = 0; y < TREES_Y; ++y)
+        for (int y = 0; y < world.height; ++y)
         {
-            for (int x = 0; x < TREES_X; ++x)
+            for (int x = 0; x < world.width; ++x, ++i)
             {
-                int zm = abs(z - (TREES_Z / 2));
-                int ym = abs(y - (TREES_Y / 2));
-                int xm = abs(x - (TREES_X / 2));
-                int dm = xm + ym + zm;
-                dm = 0;
-
-                int i = z * TREES_X * TREES_Y + y * TREES_X + x;
-                int j = z * TREES_X + x;
-                vec3 p = vec3(x * TREE_SIZE, (y - (TREES_Y / 2)) * TREE_SIZE, z * TREE_SIZE);
-                unsigned int depth = glm::max(TREE_MAX_DEPTH - dm, TWIG_LEVELS+1);
-                grow(&root[i], p, TREE_SIZE, depth, &pyramid[j]);
-
-                printf("%d ", i);
+                vec3 bmin = wmin + vec3(x, y, z) * size;
+                vec3 bmax = bmin + size;
+                if (!cubesIntersect(cmin, cmax, bmin, bmax)) continue;
+                world.chunk[i].axeCube(cmin, cmax);
+                world.mod(i);
             }
         }
     }
-    putchar('\n');
-    SW_STOP(sw);
 
-    print(&root[0]);
 }
 
-
-float manhattanCube(vec3 p, vec3 bmin, vec3 bmax)
-{
-    vec3 bmid = (bmax + bmin) * 0.5f;
-    return glm::distance(p, bmid);
-}
-
-bool cullAngle(vec3 alpha, vec3 beta, vec3 bmin, vec3 bmax)
-{
-    float theta1 = acos(glm::dot(glm::normalize(bmin - alpha), glm::normalize(beta)));
-    float theta2 = acos(glm::dot(glm::normalize(bmax - alpha), glm::normalize(beta)));
-    return glm::min(theta1, theta2) >= glm::radians(90.0f);
-}
-
-void computeTarget(const Ocroot *chunks)
-{
-    vec3 sigma = vec3(0);
-    imag.real = chunkmarch(position, direction, chunks, TREES_T, vec3(1, TREES_X, TREES_Y * TREES_X), &sigma);
-    imag.position(sigma);
-}
 
 void computeMVP()
 {
@@ -382,45 +302,30 @@ void deinitialize()
 
 void initializeControls()
 {
-    input.bind(SDL_QUIT, [&]() { 
-        running = false; 
-    });
-    input.bindKey(SDLK_UP, [&]() {
-        speed = (float)glm::clamp(speed * 2.0, 0.001, 100.0);
-    });
-    input.bindKey(SDLK_DOWN, [&]() {
-        speed = (float)glm::clamp(speed / 2.0, 0.001, 100.0);
-    });
-    input.bindKey('w', [&]() { 
-        position += direction * speed; 
-    });
-    input.bindKey('s', [&]() { 
-        position -= direction * speed; 
-    });
-    input.bindKey('a', [&]() { 
-        position -= right * speed; 
-    });
-    input.bindKey('d', [&]() { 
-        position += right * speed; 
-    });
-    input.bindKey(SDLK_SPACE, [&]() { 
-        position += glm::vec3(0.f, 1.f, 0.f) * speed; 
-    });
-    input.bindKey(SDLK_LSHIFT, [&]() { 
-        position -= glm::vec3(0.f, 1.f, 0.f) * speed; 
-    });
-    input.bindKey(SDLK_ESCAPE, [&]() {
-        running = false; 
-    });
+    input.bind(SDL_QUIT, [&]() { running = false; });
+    input.bindKey(SDLK_UP, [&]() { speed = (float)glm::clamp(speed * 2.0, 0.001, 100.0); });
+    input.bindKey(SDLK_DOWN, [&]() { speed = (float)glm::clamp(speed / 2.0, 0.001, 100.0); });
+    input.bindKey('w', [&]() { position += direction * speed; });
+    input.bindKey('s', [&]() { position -= direction * speed; });
+    input.bindKey('a', [&]() { position -= right * speed; });
+    input.bindKey('d', [&]() { position += right * speed; });
+    input.bindKey('x', [&]() { destroy(); });
+    input.bindKey('+', [&]() { imag.scale += 0.5; });
+    input.bindKey(SDLK_SPACE, [&]() { position += glm::vec3(0.f, 1.f, 0.f) * speed; });
+    input.bindKey(SDLK_LSHIFT, [&]() { position -= glm::vec3(0.f, 1.f, 0.f) * speed; });
+    input.bindKey(SDLK_ESCAPE, [&]() { running = false; });
+
     input.bindKey(SDLK_TAB, [&]() { 
         SDL_ShowCursor(SDL_ENABLE);
         SDL_SetRelativeMouseMode(SDL_FALSE);
     });
+
     input.bind(SDL_MOUSEBUTTONDOWN, [&](SDL_Event&e) {
         if (e.button.button != SDL_BUTTON_LEFT) return;
         SDL_ShowCursor(SDL_DISABLE);
         SDL_SetRelativeMouseMode(SDL_TRUE);
     });
+
     input.bind(SDL_MOUSEMOTION, [&](SDL_Event& e) {
         horzAngle -= (float)e.motion.xrel * sensitivity;
         vertAngle -= (float)e.motion.yrel * sensitivity;
