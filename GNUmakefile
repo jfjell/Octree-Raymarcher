@@ -19,7 +19,8 @@ CLANG_LDFLAGS=-Llib \
 	-lSDL2_image \
 	-lglew32 \
 	-lopengl32 \
-	-mwindows
+	-mwindows \
+	-g
 
 CPP=$(CLANG_CPP)
 LD=$(CLANG_LD)

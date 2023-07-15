@@ -368,6 +368,14 @@ void initializeControls()
     input.bindKey('x', [&]() { destroy(); });
     input.bindKey('z', [&]() { build(); });
     input.bindKey('c', [&]() { replace(); });
+    input.bindKey('g', [&]() { 
+        // Ocroot r = world.chunk[0].defragcopy();
+        Ocroot r = world.chunk[0].lodmm();
+        print(&r);
+        world.chunk[0] = r;
+        Ocdelta tree = { 0, 0, true }, twig = {0, 0, true};
+        world.mod(0, &tree, &twig);
+    });
     input.bindKey(SDLK_SPACE, [&]() { position += glm::vec3(0.f, 1.f, 0.f) * speed; });
     input.bindKey(SDLK_LSHIFT, [&]() { position -= glm::vec3(0.f, 1.f, 0.f) * speed; });
     input.bindKey(SDLK_ESCAPE, [&]() { running = false; });

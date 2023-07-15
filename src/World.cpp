@@ -235,7 +235,7 @@ void World::draw(glm::mat4 mvp, glm::vec3 eye)
 
 void World::mod(int i, const Ocdelta *tree, const Ocdelta *twig)
 {
-    if (tree->left < tree->right)
+    if (tree->left < tree->right || tree->realloc)
     {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbotree[i]);
         if (tree->realloc)
@@ -249,7 +249,7 @@ void World::mod(int i, const Ocdelta *tree, const Ocdelta *twig)
         }
     }
 
-    if (twig->left < twig->right)
+    if (twig->left < twig->right || twig->realloc)
     {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbotwig[i]);
         if (twig->realloc)

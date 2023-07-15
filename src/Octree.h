@@ -62,16 +62,17 @@ struct Ocroot
     uint64_t  twigs;
     uint64_t  treestoragesize;
     uint64_t  twigstoragesize;
+    bool      modified;
     Octree   *tree;
     Octwig   *twig;
 
     void write(const char *path);
     void read(const char *path);
-    void incLOD();
-    void decLOD();
     void destroy(glm::vec3 cmin, glm::vec3 cmax, Ocdelta *dtree, Ocdelta *dtwig);
     void build(glm::vec3 cmin, glm::vec3 cmax, uint16_t mat, Ocdelta *dtree, Ocdelta *dtwig);
     void replace(glm::vec3 cmin, glm::vec3 cmax, uint16_t mat, Ocdelta *dtree, Ocdelta *dtwig);
+    Ocroot defragcopy();
+    Ocroot lodmm();
 };
 
 struct BoundsPyramid;
