@@ -242,7 +242,7 @@ static void destroyCube(Ocroot *root,
 
             tree->left = min(tree->left, offset);
             tree->right = max(tree->right, offset+1);
-            root->tree[offset] = Octree(TWIG, pos);
+            root->tree[offset] = Octree(TWIG, (uint32_t)pos);
 
             destroyCube(root, offset, bmin, size, depth, cmin, cmax, tree, twig);
         }
@@ -257,11 +257,11 @@ static void destroyCube(Ocroot *root,
 
             size_t pos = root->trees; 
             tree->left = min(tree->left, offset);
-            root->tree[offset] = Octree(BRANCH, pos);
+            root->tree[offset] = Octree(BRANCH, (uint32_t)pos);
 
             tree->right = max(tree->right, pos + 7 + 1);
             for (size_t i = 0; i < 8; ++i)
-                root->tree[pos + i] = Octree(LEAF, t.offset());
+                root->tree[pos + i] = Octree(LEAF, (uint32_t)t.offset());
 
             root->trees += 8;
 
@@ -273,11 +273,11 @@ static void destroyCube(Ocroot *root,
         float leafsize = size / (1 << TWIG_LEVELS);
         twig->left = min(twig->left, t.offset());
         twig->right = max(twig->right, t.offset()+1);
-        for (size_t z = 0; z < TWIG_SIZE; ++z)
+        for (unsigned z = 0; z < TWIG_SIZE; ++z)
         {
-            for (size_t y = 0; y < TWIG_SIZE; ++y)
+            for (unsigned y = 0; y < TWIG_SIZE; ++y)
             {
-                for (size_t x = 0; x < TWIG_SIZE; ++x)
+                for (unsigned x = 0; x < TWIG_SIZE; ++x)
                 {
                     size_t i = Octwig::word(x, y, z);
                     vec3 leafmin = bmin + vec3(x, y, z) * leafsize;
@@ -290,8 +290,8 @@ static void destroyCube(Ocroot *root,
     }
     else if (t.type() == BRANCH)
     {
-        float halfsize = size * 0.5;
-        for (size_t i = 0; i < 8; ++i)
+        float halfsize = size * 0.5f;
+        for (unsigned i = 0; i < 8; ++i)
         {
             bool xg, yg, zg;
             Octree::cut(i, &xg, &yg, &zg);
@@ -357,7 +357,7 @@ static void buildCube(Ocroot *root,
 
             tree->left = min(tree->left, offset);
             tree->right = max(tree->right, offset+1);
-            root->tree[offset] = Octree(TWIG, pos);
+            root->tree[offset] = Octree(TWIG, (uint32_t)pos);
 
             buildCube(root, offset, bmin, size, depth, cmin, cmax, material, tree, twig);
         }
@@ -372,7 +372,7 @@ static void buildCube(Ocroot *root,
 
             size_t pos = root->trees; 
             tree->left = min(tree->left, offset);
-            root->tree[offset] = Octree(BRANCH, pos);
+            root->tree[offset] = Octree(BRANCH, (uint32_t)pos);
 
             tree->right = max(tree->right, pos + 7 + 1);
             for (size_t i = 0; i < 8; ++i)
@@ -392,11 +392,11 @@ static void buildCube(Ocroot *root,
         float leafsize = size / (1 << TWIG_LEVELS);
         twig->left = min(twig->left, t.offset());
         twig->right = max(twig->right, t.offset()+1);
-        for (size_t z = 0; z < TWIG_SIZE; ++z)
+        for (unsigned z = 0; z < TWIG_SIZE; ++z)
         {
-            for (size_t y = 0; y < TWIG_SIZE; ++y)
+            for (unsigned y = 0; y < TWIG_SIZE; ++y)
             {
-                for (size_t x = 0; x < TWIG_SIZE; ++x)
+                for (unsigned x = 0; x < TWIG_SIZE; ++x)
                 {
                     size_t i = Octwig::word(x, y, z);
                     vec3 leafmin = bmin + vec3(x, y, z) * leafsize;
@@ -409,8 +409,8 @@ static void buildCube(Ocroot *root,
     }
     else if (t.type() == BRANCH)
     {
-        float halfsize = size * 0.5;
-        for (size_t i = 0; i < 8; ++i)
+        float halfsize = size * 0.5f;
+        for (unsigned i = 0; i < 8; ++i)
         {
             bool xg, yg, zg;
             Octree::cut(i, &xg, &yg, &zg);

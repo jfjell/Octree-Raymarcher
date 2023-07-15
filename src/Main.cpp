@@ -165,10 +165,10 @@ int main()
     return 0;
 }
 
-void computeTarget(const World *world)
+void computeTarget(const World *w)
 {
     vec3 sigma = vec3(0);
-    imag.real = chunkmarch(position, direction, world->chunk, world->volume, vec3(1, world->width, world->width * world->height), &sigma);
+    imag.real = chunkmarch(position, direction, w->chunk, w->volume, vec3(1, w->width, w->width * w->height), &sigma);
     imag.position(sigma);
 }
 
