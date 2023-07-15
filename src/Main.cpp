@@ -191,13 +191,66 @@ void destroy()
                 vec3 bmin = wmin + vec3(x, y, z) * size;
                 vec3 bmax = bmin + size;
                 if (!cubesIntersect(cmin, cmax, bmin, bmax)) continue;
-                Ocaxe tree, twig;
-                world.chunk[i].axeCube(cmin, cmax, &tree, &twig);
+                Ocdelta tree, twig;
+                world.chunk[i].destroy(cmin, cmax, &tree, &twig);
                 world.mod(i, &tree, &twig);
             }
         }
     }
+}
 
+void build()
+{
+    if (!imag.real) return;
+
+    float size = world.chunk[0].size;
+    vec3 wmin = world.chunk[0].position;
+
+    vec3 cmin = imag.bmin;
+    vec3 cmax = cmin + imag.scale;
+
+    for (int z = 0, i = 0; z < world.depth; ++z)
+    {
+        for (int y = 0; y < world.height; ++y)
+        {
+            for (int x = 0; x < world.width; ++x, ++i)
+            {
+                vec3 bmin = wmin + vec3(x, y, z) * size;
+                vec3 bmax = bmin + size;
+                if (!cubesIntersect(cmin, cmax, bmin, bmax)) continue;
+                Ocdelta tree, twig;
+                world.chunk[i].build(cmin, cmax, 5, &tree, &twig);
+                world.mod(i, &tree, &twig);
+            }
+        }
+    }
+}
+
+void replace()
+{
+    if (!imag.real) return;
+
+    float size = world.chunk[0].size;
+    vec3 wmin = world.chunk[0].position;
+
+    vec3 cmin = imag.bmin;
+    vec3 cmax = cmin + imag.scale;
+
+    for (int z = 0, i = 0; z < world.depth; ++z)
+    {
+        for (int y = 0; y < world.height; ++y)
+        {
+            for (int x = 0; x < world.width; ++x, ++i)
+            {
+                vec3 bmin = wmin + vec3(x, y, z) * size;
+                vec3 bmax = bmin + size;
+                if (!cubesIntersect(cmin, cmax, bmin, bmax)) continue;
+                Ocdelta tree, twig;
+                world.chunk[i].replace(cmin, cmax, 5, &tree, &twig);
+                world.mod(i, &tree, &twig);
+            }
+        }
+    }
 }
 
 void computeMVP()
@@ -310,9 +363,11 @@ void initializeControls()
     input.bindKey('s', [&]() { position -= direction * speed; });
     input.bindKey('a', [&]() { position -= right * speed; });
     input.bindKey('d', [&]() { position += right * speed; });
-    input.bindKey('x', [&]() { destroy(); });
     input.bindKey('+', [&]() { imag.scale += 0.5; });
     input.bindKey('-', [&]() { imag.scale = glm::max(imag.scale - 0.5f, 0.0f); });
+    input.bindKey('x', [&]() { destroy(); });
+    input.bindKey('z', [&]() { build(); });
+    input.bindKey('c', [&]() { replace(); });
     input.bindKey(SDLK_SPACE, [&]() { position += glm::vec3(0.f, 1.f, 0.f) * speed; });
     input.bindKey(SDLK_LSHIFT, [&]() { position -= glm::vec3(0.f, 1.f, 0.f) * speed; });
     input.bindKey(SDLK_ESCAPE, [&]() { running = false; });

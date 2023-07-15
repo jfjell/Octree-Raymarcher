@@ -180,6 +180,7 @@ void World::draw(glm::mat4 mvp, glm::vec3 eye)
     glDisable(GL_STENCIL_TEST);
 
     glEnable(GL_CULL_FACE);
+
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
 
@@ -232,7 +233,7 @@ void World::draw(glm::mat4 mvp, glm::vec3 eye)
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
-void World::mod(int i, const Ocaxe *tree, const Ocaxe *twig)
+void World::mod(int i, const Ocdelta *tree, const Ocdelta *twig)
 {
     if (tree->left < tree->right)
     {

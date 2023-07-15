@@ -7,7 +7,7 @@
 #include <glm/vec3.hpp>
 
 struct Ocroot;
-struct Ocaxe;
+struct Ocdelta;
 struct BoundsPyramid;
 
 struct World
@@ -24,7 +24,7 @@ struct World
     void init(int w, int h, int d);
     void deinit();
     void gpu();
-    void mod(int i, const Ocaxe *tree, const Ocaxe *twig);
+    void mod(int i, const Ocdelta *tree, const Ocdelta *twig);
     void draw(glm::mat4 mvp, glm::vec3 eye);
 };
 

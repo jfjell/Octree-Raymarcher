@@ -184,25 +184,25 @@ void Ocroot::read(const char *path)
     FILE *fp = fopen(path, "rb");
     fread(&position, 1, TREE_STRUCT_SIZE, fp);
 
-    tree = (Octree *)malloc(trees * sizeof(Octree));
+    tree = (Octree *)malloc(treestoragesize * sizeof(Octree));
     fread(tree, sizeof(Octree), trees, fp);
 
-    twig = (Octwig *)malloc(twigs * sizeof(Octwig));
+    twig = (Octwig *)malloc(twigstoragesize * sizeof(Octwig));
     fread(twig, sizeof(Octwig), twigs, fp);
 
     fclose(fp);
 }
 
 
-static void axe(Ocroot *root, 
+static void destroyCube(Ocroot *root, 
     uint64_t offset, 
     vec3 bmin, 
     float size, 
     size_t depth, 
     vec3 cmin, 
     vec3 cmax,
-    Ocaxe *tree,
-    Ocaxe *twig)
+    Ocdelta *tree,
+    Ocdelta *twig)
 {
     using glm::min;
     using glm::max;
@@ -244,7 +244,7 @@ static void axe(Ocroot *root,
             tree->right = max(tree->right, offset+1);
             root->tree[offset] = Octree(TWIG, pos);
 
-            axe(root, offset, bmin, size, depth, cmin, cmax, tree, twig);
+            destroyCube(root, offset, bmin, size, depth, cmin, cmax, tree, twig);
         }
         else
         {
@@ -265,7 +265,7 @@ static void axe(Ocroot *root,
 
             root->trees += 8;
 
-            axe(root, offset, bmin, size, depth, cmin, cmax, tree, twig);
+            destroyCube(root, offset, bmin, size, depth, cmin, cmax, tree, twig);
         }
     }
     else if (t.type() == TWIG)
@@ -296,7 +296,7 @@ static void axe(Ocroot *root,
             bool xg, yg, zg;
             Octree::cut(i, &xg, &yg, &zg);
             vec3 nextmin = bmin + vec3(xg, yg, zg) * halfsize;
-            axe(root, t.offset() + i, nextmin, halfsize, depth+1, cmin, cmax, tree, twig);
+            destroyCube(root, t.offset() + i, nextmin, halfsize, depth+1, cmin, cmax, tree, twig);
         }
     }
     else
@@ -305,11 +305,138 @@ static void axe(Ocroot *root,
     }
 }
 
-void Ocroot::axeCube(glm::vec3 cmin, glm::vec3 cmax, Ocaxe *treeAxe, Ocaxe *twigAxe)
+void Ocroot::destroy(glm::vec3 cmin, glm::vec3 cmax, Ocdelta *dtree, Ocdelta *dtwig)
 {
-    *treeAxe = Ocaxe(SIZE_MAX, 0, false);
-    *twigAxe = Ocaxe(SIZE_MAX, 0, false);
-    axe(this, 0, position, size, 0, cmin, cmax, treeAxe, twigAxe);
+    *dtree = Ocdelta(SIZE_MAX, 0, false);
+    *dtwig = Ocdelta(SIZE_MAX, 0, false);
+    destroyCube(this, 0, position, size, 0, cmin, cmax, dtree, dtwig);
+}
+
+static void buildCube(Ocroot *root, 
+    uint64_t offset, 
+    vec3 bmin, 
+    float size, 
+    size_t depth, 
+    vec3 cmin, 
+    vec3 cmax,
+    uint16_t material,
+    Ocdelta *tree,
+    Ocdelta *twig)
+{
+    using glm::min;
+    using glm::max;
+
+    vec3 bmax = bmin + size;
+
+    if (!cubesIntersect(bmin, bmax, cmin, cmax))
+        return;
+
+    Octree t = root->tree[offset];
+    if (t.type() == EMPTY)
+    {
+        if (cubeIsInside(cmin, cmax, bmin, bmax))
+        {
+            tree->left = min(tree->left, offset);
+            tree->right = max(tree->right, offset+1);
+            root->tree[offset] = Octree(LEAF, material);
+        }
+        else if (depth == root->depth - TWIG_LEVELS)
+        {
+            // At max depth => make a twig
+            if (root->twigs >= root->twigstoragesize)
+            {
+                root->twig = (Octwig *)realloc(root->twig, (root->twigstoragesize *= 2) * sizeof(Octwig));
+                twig->realloc = true;
+            }
+
+            size_t pos = root->twigs++; 
+            
+            twig->left = min(twig->left, pos);
+            twig->right = max(twig->right, pos+1);
+            root->twig[pos] = Octwig(0);
+
+            tree->left = min(tree->left, offset);
+            tree->right = max(tree->right, offset+1);
+            root->tree[offset] = Octree(TWIG, pos);
+
+            buildCube(root, offset, bmin, size, depth, cmin, cmax, material, tree, twig);
+        }
+        else
+        {
+            // Make 8 leaf children and check recursively
+            if (root->trees+8 >= root->treestoragesize)
+            {
+                root->tree = (Octree *)realloc(root->tree, (root->treestoragesize *= 2) * sizeof(Octree));
+                tree->realloc = true;
+            }
+
+            size_t pos = root->trees; 
+            tree->left = min(tree->left, offset);
+            root->tree[offset] = Octree(BRANCH, pos);
+
+            tree->right = max(tree->right, pos + 7 + 1);
+            for (size_t i = 0; i < 8; ++i)
+                root->tree[pos + i] = Octree(EMPTY, 0);
+
+            root->trees += 8;
+
+            buildCube(root, offset, bmin, size, depth, cmin, cmax, material, tree, twig);
+        }
+    }
+    else if (t.type() == LEAF)
+    {
+        return;
+    }
+    else if (t.type() == TWIG)
+    {
+        float leafsize = size / (1 << TWIG_LEVELS);
+        twig->left = min(twig->left, t.offset());
+        twig->right = max(twig->right, t.offset()+1);
+        for (size_t z = 0; z < TWIG_SIZE; ++z)
+        {
+            for (size_t y = 0; y < TWIG_SIZE; ++y)
+            {
+                for (size_t x = 0; x < TWIG_SIZE; ++x)
+                {
+                    size_t i = Octwig::word(x, y, z);
+                    vec3 leafmin = bmin + vec3(x, y, z) * leafsize;
+                    vec3 leafmax = leafmin + leafsize;
+                    if (root->twig[t.offset()].leaf[i] == 0 && cubesIntersect(leafmin, leafmax, cmin, cmax))
+                        root->twig[t.offset()].leaf[i] = material;
+                }
+            }
+        }
+    }
+    else if (t.type() == BRANCH)
+    {
+        float halfsize = size * 0.5;
+        for (size_t i = 0; i < 8; ++i)
+        {
+            bool xg, yg, zg;
+            Octree::cut(i, &xg, &yg, &zg);
+            vec3 nextmin = bmin + vec3(xg, yg, zg) * halfsize;
+            buildCube(root, t.offset() + i, nextmin, halfsize, depth+1, cmin, cmax, material, tree, twig);
+        }
+    }
+    else
+    {
+        assert(false);
+    }
+}
+
+void Ocroot::build(glm::vec3 cmin, glm::vec3 cmax, uint16_t mat, Ocdelta *dtree, Ocdelta *dtwig)
+{
+    *dtree = Ocdelta(SIZE_MAX, 0, false);
+    *dtwig = Ocdelta(SIZE_MAX, 0, false);
+    buildCube(this, 0, position, size, 0, cmin, cmax, mat, dtree, dtwig);
+}
+
+void Ocroot::replace(glm::vec3 cmin, glm::vec3 cmax, uint16_t mat, Ocdelta *dtree, Ocdelta *dtwig)
+{
+    *dtree = Ocdelta(SIZE_MAX, 0, false);
+    *dtwig = Ocdelta(SIZE_MAX, 0, false);
+    destroyCube(this, 0, position, size, 0, cmin, cmax, dtree, dtwig);
+    buildCube(this, 0, position, size, 0, cmin, cmax, mat, dtree, dtwig);
 }
 
 void Ocroot::incLOD()
