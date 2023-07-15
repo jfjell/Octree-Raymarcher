@@ -506,16 +506,19 @@ size_t depth(const Ocroot *root, uint32_t offset)
     return max + 1;
 } 
 
-uint16_t majority(const uint16_t *x, size_t xs)
+uint16_t majority0(const uint16_t *x, size_t xs)
 {
     uint16_t v = 0, s = 0;
     for (size_t i = 0; i < xs; ++i)
     {
+        if (!x[i]) continue;
+
         size_t sum = 0;
         for (size_t j = 0; j < xs; ++j)
             sum += x[j] == x[i];
-        if (sum < s)
-            continue;
+
+        if (sum < s) continue;
+
         v = x[i];
         s = sum;
     }
@@ -590,6 +593,7 @@ static void lodmm(const Ocroot *from, Ocroot *to, uint32_t f, uint32_t t, size_t
                             for (unsigned int x = p0.x; x < p1.x; ++x)
                             {
                                 uint16_t b[8];
+                                unsigned int s = 0;
                                 for (unsigned int dz = 0, j = 0; dz < 2; ++dz)
                                 {
                                     for (unsigned int dy = 0; dy < 2; ++dy)
@@ -598,10 +602,11 @@ static void lodmm(const Ocroot *from, Ocroot *to, uint32_t f, uint32_t t, size_t
                                         {
                                             uvec3 p = uvec3(x, y, z) / 2u + uvec3(dx, dy, dz);
                                             b[j] = twig.leaf[Octwig::word(p.x, p.y, p.z)];
+                                            s += b[j] != 0;
                                         }
                                     }
                                 }
-                                to->twig[pos].leaf[Octwig::word(x, y, z)] = majority(b, 8);
+                                to->twig[pos].leaf[Octwig::word(x, y, z)] = s >= 4 ? majority0(b, 8) : 0;
                             }
                         }
                     }
