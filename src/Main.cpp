@@ -53,14 +53,6 @@ void deinitialize();
 void initializeControls();
 void glCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *argp);
 
-#define TREES_X 3
-#define TREES_Z 3
-#define TREES_Y 1
-#define TREES_T (TREES_X * TREES_Y * TREES_Z)
-#define TREE_MAX_DEPTH 9
-#define TREE_SIZE 128
-#define PYRAMID_RESOLUTION 64
-
 int main() 
 {
     using glm::vec3;
@@ -73,7 +65,7 @@ int main()
 
     imag.init(1.0);
 
-    world.init(TREES_X, TREES_Y, TREES_Z, TREE_SIZE);
+    world.init(5, 1, 4, 128);
     print(&world.chunk[0]);
     world.load_gpu();
 
@@ -117,7 +109,7 @@ int main()
 
         gbuffer.enable();
 
-        glClearColor(1.f, 1.f, 1.f, 1.f);
+        glClearColor(0.1f, .4f, .8f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
         int culled = 0;
@@ -144,7 +136,7 @@ int main()
             text.printf("fov: %f, h: %f, v: %f", fov, glm::degrees(horzAngle), glm::degrees(vertAngle));
             text.printf("x: %f, y: %f, z: %f, ", position.x, position.y, position.z);
             text.printf("speed: %f", speed);
-            text.printf("culled/trees: %d/%d = %f%%", culled, TREES_T, (float)culled * 100 / TREES_T);
+            text.printf("culled/trees: %d/%d = %f%%", culled, world.volume, (float)culled * 100 / world.volume);
 
             textframe.restart();
         }
@@ -168,89 +160,55 @@ int main()
 void computeTarget(const World *w)
 {
     vec3 sigma = vec3(0);
-    imag.real = chunkmarch(position, direction, w->chunk, w->volume, vec3(1, w->width, w->width * w->height), &sigma);
+    imag.real = chunkmarch(position, direction, w, &sigma);
     imag.position(sigma);
+}
+
+template <typename F>
+void modify(const ImagCube *imag, World *world, F f)
+{
+    if (!imag->real) return;
+
+    for (int i = 0; i < 8; ++i)
+    {
+        vec3 p = imag->bmin + vec3(glm::bvec3(i & 4, i & 2, i & 1)) * imag->scale;
+
+        int j = world->index(p.x / world->chunksize, p.y / world->chunksize, p.z / world->chunksize);
+
+        if (!isInsideCube(p, world->chunk[j].position, world->chunk[j].position + (float)world->chunksize)) continue;
+
+        f(j);
+    }
 }
 
 void destroy()
 {
-    if (!imag.real) return;
-
-    float size = world.chunk[0].size;
-    vec3 wmin = world.chunk[0].position;
-
-    vec3 cmin = imag.bmin;
-    vec3 cmax = cmin + imag.scale;
-
-    for (int z = 0, i = 0; z < world.depth; ++z)
-    {
-        for (int y = 0; y < world.height; ++y)
-        {
-            for (int x = 0; x < world.width; ++x, ++i)
-            {
-                vec3 bmin = wmin + vec3(x, y, z) * size;
-                vec3 bmax = bmin + size;
-                if (!cubesIntersect(cmin, cmax, bmin, bmax)) continue;
-                Ocdelta tree, twig;
-                world.chunk[i].destroy(cmin, cmax, &tree, &twig);
-                world.modify(i, &tree, &twig);
-            }
-        }
-    }
+    auto dd = [&](int i) { 
+        Ocdelta deltatree, deltatwig;
+        world.chunk[i].destroy(imag.bmin, imag.bmin + imag.scale, &deltatree, &deltatwig);
+        world.modify(i, &deltatree, &deltatwig);
+    };
+    modify(&imag, &world, dd);
 }
 
 void build()
 {
-    if (!imag.real) return;
-
-    float size = world.chunk[0].size;
-    vec3 wmin = world.chunk[0].position;
-
-    vec3 cmin = imag.bmin;
-    vec3 cmax = cmin + imag.scale;
-
-    for (int z = 0, i = 0; z < world.depth; ++z)
-    {
-        for (int y = 0; y < world.height; ++y)
-        {
-            for (int x = 0; x < world.width; ++x, ++i)
-            {
-                vec3 bmin = wmin + vec3(x, y, z) * size;
-                vec3 bmax = bmin + size;
-                if (!cubesIntersect(cmin, cmax, bmin, bmax)) continue;
-                Ocdelta tree, twig;
-                world.chunk[i].build(cmin, cmax, 5, &tree, &twig);
-                world.modify(i, &tree, &twig);
-            }
-        }
-    }
+    auto db = [&](int i) { 
+        Ocdelta deltatree, deltatwig;
+        world.chunk[i].build(imag.bmin, imag.bmin + imag.scale, 5, &deltatree, &deltatwig);
+        world.modify(i, &deltatree, &deltatwig);
+    };
+    modify(&imag, &world, db);
 }
 
 void replace()
 {
-    if (!imag.real) return;
-
-    float size = world.chunk[0].size;
-    vec3 wmin = world.chunk[0].position;
-
-    vec3 cmin = imag.bmin;
-    vec3 cmax = cmin + imag.scale;
-
-    for (int z = 0, i = 0; z < world.depth; ++z)
-    {
-        for (int y = 0; y < world.height; ++y)
-        {
-            for (int x = 0; x < world.width; ++x, ++i)
-            {
-                vec3 bmin = wmin + vec3(x, y, z) * size;
-                vec3 bmax = bmin + size;
-                if (!cubesIntersect(cmin, cmax, bmin, bmax)) continue;
-                Ocdelta tree, twig;
-                world.chunk[i].replace(cmin, cmax, 5, &tree, &twig);
-                world.modify(i, &tree, &twig);
-            }
-        }
-    }
+    auto dr = [&](int i) { 
+        Ocdelta deltatree, deltatwig;
+        world.chunk[i].replace(imag.bmin, imag.bmin + imag.scale, 5, &deltatree, &deltatwig);
+        world.modify(i, &deltatree, &deltatwig);
+    };
+    modify(&imag, &world, dr);
 }
 
 void computeMVP()

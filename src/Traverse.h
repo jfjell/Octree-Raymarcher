@@ -7,6 +7,7 @@
 
 struct Ocroot;
 struct Octwig;
+struct World;
 
 struct Tree
 {
@@ -26,6 +27,6 @@ bool cubeIsInside(glm::vec3 omin, glm::vec3 omax, glm::vec3 imin, glm::vec3 imax
 Tree traverse(glm::vec3 p, const Ocroot *root);
 bool twigmarch(glm::vec3 a, glm::vec3 b, glm::vec3 bmin, float size, float leafsize, const Octwig *twig, float *s);
 bool treemarch(glm::vec3 a, glm::vec3 b, const Ocroot *root, float *s);
-bool chunkmarch(glm::vec3 alpha, glm::vec3 beta, const Ocroot *chunk, size_t chunks, glm::vec3 index, glm::vec3 *sigma);
+bool chunkmarch(glm::vec3 alpha, glm::vec3 beta, const World *world, glm::vec3 *sigma);
 
 #endif

@@ -22,7 +22,7 @@ void World::init(int w, int h, int d, int s)
     depth  = d;
     plane  = width * depth;
     volume = plane * height;
-    chunk_size = s;
+    chunksize = s;
 
     bmin = ivec3(0);
     bmax = ivec3(width, height, depth);
@@ -259,28 +259,29 @@ void World::modify(int i, const Ocdelta *tree, const Ocdelta *twig)
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
-static int rem(int x, int m)
+static int mod(int n, int m)
 {
-    return (x + (x / m + 1) * m) % m;
+    return (n + (n / m + 1) * m) % m;
 }
 
-static int index_pl(int x, int z, int w, int d)
+int World::index(int x, int z) const
 {
-    int i = (rem(z, d) * w) + rem(x, w);
-    assert(i >= 0 && i < w * d);
+    int i = (mod(z, depth) * width) + mod(x, width);
+    assert(i >= 0 && i < width * depth);
     return i;
 }
 
-static int index_vo(int x, int y, int z, int w, int h, int d)
+int World::index(int x, int y, int z) const
 {
-    int i = (rem(y, h) * w * d) + (rem(z, d) * w) + rem(x, w);
-    assert(i >= 0 && i < w * h * d);
+    int i = (mod(y, height) * width * depth) + (mod(z, depth) * width) + mod(x, width);
+    assert(i >= 0 && i < width * height * depth);
     return i;
 }
 
+// Both of these currently leak memory
 void World::g_pyramid(int x, int z)
 {
-    int i = index_pl(x, z, width, depth);
+    int i = index(x, z);
     float amplitude = 16;
     float period = 1.0f / PYRAMID_RESOLUTION;
     float xshift = (float)x * PYRAMID_RESOLUTION;
@@ -292,16 +293,21 @@ void World::g_pyramid(int x, int z)
 
 void World::g_chunk(int x, int y, int z)
 {
-    int i = index_vo(x, y, z, width, height, depth);
-    int j = index_pl(x, z, width, depth);
-    vec3 p = vec3(x * chunk_size, (y - (height / 2)) * chunk_size, z * chunk_size);
+    int i = index(x, y, z);
+    int j = index(x, z);
+    vec3 p = vec3(x * chunksize, (y - (height / 2)) * chunksize, z * chunksize);
     chunk[i] = Ocroot();
-    grow(&chunk[i], p, chunk_size, TREE_MAX_DEPTH, &heightmap[j]);
+    grow(&chunk[i], p, chunksize, TREE_MAX_DEPTH, &heightmap[j]);
 }
 
 void World::shift(glm::ivec3 s)
 {
     assert(glm::length(vec3(s)) == 1.0);
+
+    ivec3 bounds(width, height, depth);
+
+    for (size_t i = 0; i < 3; ++i)
+        assert(bmax[i] - bmin[i] == bounds[i]);
 
     for (int y = 0; y < height; ++y)
     {
@@ -314,7 +320,7 @@ void World::shift(glm::ivec3 s)
             g_pyramid(x2, z2);
             g_chunk(x2, y2, z2);
             Ocdelta d1(true), d2(true);
-            modify(index_vo(x2, y2, z2, width, height, depth), &d1, &d2);
+            modify(index(x2, y2, z2), &d1, &d2);
         }
     }
     bmin += ivec3(0, 0, 1);

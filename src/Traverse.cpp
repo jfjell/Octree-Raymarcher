@@ -2,6 +2,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include "Traverse.h"
 #include "Octree.h"
+#include "World.h"
 
 
 #define EPS (1.0f / 8192.0f)
@@ -123,34 +124,32 @@ float intersectCube(vec3 a, vec3 b, vec3 cmin, vec3 cmax, bool *intersect)
     return tnear;
 }
 
-bool chunkmarch(vec3 alpha, vec3 beta, const Ocroot *chunk, size_t chunks, vec3 index, vec3 *sigma)
+bool chunkmarch(vec3 alpha, vec3 beta, const World *world, vec3 *sigma)
 {
-    float chsize = chunk[0].size;
-    vec3 chmin = chunk[0].position;
-    vec3 chmax = chunk[chunks-1].position + chsize;
+    float chunksize = world->chunksize;
+    vec3 chunkmin = vec3(world->bmin * (int)chunksize);
+    vec3 chunkmax = vec3(world->bmax * (int)chunksize);
 
     float t = 0.0f;
     bool intersect = true;
-    if (!isInsideCube(alpha, chmin, chmax)) 
-        t = intersectCube(alpha, beta, chmin, chmax, &intersect) + EPS;
+    if (!isInsideCube(alpha, chunkmin, chunkmax)) 
+        t = intersectCube(alpha, beta, chunkmin, chunkmax, &intersect) + EPS;
     if (!intersect)
         return false;
 
     for (int c = 0; c < 1000; ++c)
     {
         vec3 p = alpha + beta * t;
-        if (!isInsideCube(p, chmin, chmax)) 
+        if (!isInsideCube(p, chunkmin, chunkmax)) 
             return false;
 
-        ivec3 chi = (p - chmin) / chsize;
-        int i = (int)glm::dot(vec3(chi), index);
-        if (i < 0 || i >= (int)chunks) 
-            return false;
-        if (!isInsideCube(p, chunk[i].position, chunk[i].position + chsize))
+        int i = world->index(p.x / chunksize, p.y / chunksize, p.z / chunksize);
+
+        if (!isInsideCube(p, world->chunk[i].position, world->chunk[i].position + chunksize))
             return false;
 
         float s = 0;
-        if (treemarch(p, beta, &chunk[i], &s))
+        if (treemarch(p, beta, &world->chunk[i], &s))
         {
             t += s;
             *sigma = alpha + beta * t;
@@ -158,7 +157,7 @@ bool chunkmarch(vec3 alpha, vec3 beta, const Ocroot *chunk, size_t chunks, vec3 
         }
         else
         {
-            float escape = cubeEscapeDistance(p, beta, chunk[i].position, chunk[i].position + chsize);
+            float escape = cubeEscapeDistance(p, beta, world->chunk[i].position, world->chunk[i].position + chunksize);
             t += escape + EPS;
         }
     }

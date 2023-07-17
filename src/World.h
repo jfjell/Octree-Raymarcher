@@ -25,9 +25,11 @@ struct World
     BoundsPyramid *heightmap;
     WorldGPUContext gpu;
     int *order;
-    int width, height, depth, plane, volume, chunk_size;
+    int width, height, depth, plane, volume, chunksize;
     glm::ivec3 bmin, bmax;
 
+    int index(int x, int y, int z) const;
+    int index(int x, int z) const;
     void init(int w, int h, int d, int s);
     void deinit();
     void load_gpu();
