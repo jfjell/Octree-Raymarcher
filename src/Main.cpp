@@ -65,7 +65,7 @@ int main()
 
     imag.init(1.0);
 
-    world.init(5, 1, 4, 128);
+    world.init(5, 5, 5, 128);
     print(&world.chunk[0]);
     world.load_gpu();
 
@@ -336,12 +336,12 @@ void initializeControls()
         Ocdelta tree(true), twig(true);
         world.modify(0, &tree, &twig);
     });
-    input.bindKey('0', [&]() { world.shift(glm::ivec3(0, 0, 1)); });
-    input.bindKey('1', [&]() { world.shift(glm::ivec3(0, 1, 0)); });
-    input.bindKey('2', [&]() { world.shift(glm::ivec3(1, 0, 0)); });
-    input.bindKey('3', [&]() { world.shift(glm::ivec3(0, 0, -1)); });
+    input.bindKey('1', [&]() { world.shift(glm::ivec3(1, 0, 0)); });
+    input.bindKey('2', [&]() { world.shift(glm::ivec3(-1, 0, 0)); });
+    input.bindKey('3', [&]() { world.shift(glm::ivec3(0, 1, 0)); });
     input.bindKey('4', [&]() { world.shift(glm::ivec3(0, -1, 0)); });
-    input.bindKey('5', [&]() { world.shift(glm::ivec3(-1, 0, 0)); });
+    input.bindKey('5', [&]() { world.shift(glm::ivec3(0, 0, 1)); });
+    input.bindKey('6', [&]() { world.shift(glm::ivec3(0, 0, -1)); });
     input.bindKey(SDLK_SPACE, [&]() { position += glm::vec3(0.f, 1.f, 0.f) * speed; });
     input.bindKey(SDLK_LSHIFT, [&]() { position -= glm::vec3(0.f, 1.f, 0.f) * speed; });
     input.bindKey(SDLK_ESCAPE, [&]() { running = false; });

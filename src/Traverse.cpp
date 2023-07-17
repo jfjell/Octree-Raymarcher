@@ -143,10 +143,13 @@ bool chunkmarch(vec3 alpha, vec3 beta, const World *world, vec3 *sigma)
         if (!isInsideCube(p, chunkmin, chunkmax)) 
             return false;
 
-        vec3 q = world->index_float(p);
-        int i = world->index((int)q.x, (int)q.y, (int)q.z);
+        ivec3 q = world->index_float(p);
+        int i = world->index(q.x, q.y, q.z);
 
-        if (!isInsideCube(p, world->chunk[i].position, world->chunk[i].position + chunksize))
+        vec3 cmin = world->chunk[i].position;
+        vec3 cmax = cmin + chunksize;
+
+        if (!isInsideCube(p, cmin, cmax))
             return false;
 
         float s = 0;
@@ -158,7 +161,7 @@ bool chunkmarch(vec3 alpha, vec3 beta, const World *world, vec3 *sigma)
         }
         else
         {
-            float escape = cubeEscapeDistance(p, beta, world->chunk[i].position, world->chunk[i].position + chunksize);
+            float escape = cubeEscapeDistance(p, beta, cmin, cmax);
             t += escape + EPS;
         }
     }

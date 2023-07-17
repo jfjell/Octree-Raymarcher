@@ -24,19 +24,19 @@ void World::init(int w, int h, int d, int s)
     volume = plane * height;
     chunksize = s;
 
-    bmin = ivec3(0);
-    bmax = ivec3(width, height, depth);
+    bmax = ivec3(w / 2 + w % 2, h / 2 + h % 2, d / 2 + d % 2);
+    bmin = ivec3(-w / 2, -h / 2, -d / 2);
 
     heightmap = new BoundsPyramid[plane];
     for (int z = 0; z < depth; ++z)
         for (int x = 0; x < width; ++x)
-            g_pyramid(x, z);
+            g_pyramid(bmin.x+x, bmin.z+z);
 
     chunk = new Ocroot[volume];
     for (int z = 0; z < depth; ++z)
         for (int y = 0; y < height; ++y)
             for (int x = 0; x < width; ++x)
-                g_chunk(x, y, z);
+                g_chunk(bmin.x+x, bmin.y+y, bmin.z+z);
 
     order = new int[volume];
     for (int i = 0; i < volume; ++i)
@@ -295,7 +295,7 @@ void World::g_chunk(int x, int y, int z)
 {
     int i = index(x, y, z);
     int j = index(x, z);
-    vec3 p = vec3(x * chunksize, (y - (height / 2)) * chunksize, z * chunksize);
+    vec3 p = vec3(x, y, z) * (float)chunksize;
     chunk[i] = Ocroot();
     grow(&chunk[i], p, (float)chunksize, TREE_MAX_DEPTH, &heightmap[j]);
 }
@@ -306,7 +306,7 @@ glm::ivec3 World::index_float(glm::vec3 p) const
     using glm::ivec3;
 
     vec3 q = p / (float)chunksize;
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < 3; ++i) 
         if (q[i] < 0.0) q[i] -= 1.0;
     return ivec3(q); 
 }
@@ -345,6 +345,7 @@ void World::shift(glm::ivec3 offset)
             modify(this->index(p.x, p.y, p.z), &d, &d);
         }
     }
+
     bmin += offset;
     bmax += offset;
 }
