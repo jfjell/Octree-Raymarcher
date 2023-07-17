@@ -549,14 +549,14 @@ static float density(const Ocroot *root, uint32_t offset,
     else if (tree.type() == TWIG)
     {
         float leafsize = size / (1 << TWIG_LEVELS);
-        uvec3 tmin = uvec3(glm::clamp((cmin - bmin) / leafsize, 0.0f, (float)TWIG_SIZE));
-        uvec3 tmax = uvec3(glm::clamp((cmax - bmin) / leafsize, 0.0f, (float)TWIG_SIZE));
+        vec3 tmin = glm::clamp((cmin - bmin) / leafsize, 0.0f, (float)TWIG_SIZE);
+        vec3 tmax = glm::clamp((cmax - bmin) / leafsize, 0.0f, (float)TWIG_SIZE);
 
         uint16_t cellulose[8];
         size_t leaves = 0;
-        for (unsigned int z = tmin.z; z < tmax.z; ++z)
-            for (unsigned int y = tmin.y; y < tmax.y; ++y)
-                for (unsigned int x = tmin.x; x < tmax.x; ++x)
+        for (unsigned int z = (unsigned)tmin.z; (float)z < tmax.z; ++z)
+            for (unsigned int y = (unsigned)tmin.y; (float)y < tmax.y; ++y)
+                for (unsigned int x = (unsigned)tmin.x; (float)x < tmax.x; ++x)
                     cellulose[leaves++] = root->twig[tree.offset()].leaf[Octwig::word(x, y, z)];
         assert(leaves == 8);
         *maj = majority(cellulose, 8);
@@ -565,7 +565,6 @@ static float density(const Ocroot *root, uint32_t offset,
     else
     {
         assert(tree.type() == BRANCH);
-
 
         size_t count = 0;
         float sum = 0.0;
