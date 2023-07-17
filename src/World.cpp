@@ -300,15 +300,43 @@ void World::g_chunk(int x, int y, int z)
     grow(&chunk[i], p, chunksize, TREE_MAX_DEPTH, &heightmap[j]);
 }
 
-void World::shift(glm::ivec3 s)
+void World::shift(glm::ivec3 offset)
 {
-    assert(glm::length(vec3(s)) == 1.0);
+    using glm::vec3;
+    using glm::ivec3;
+    using glm::ivec2;
+    using glm::length;
+    using glm::abs;
 
+    assert(glm::length(vec3(offset)) == 1.0);
+
+    ivec3 axis[] = { ivec3(1, 0, 0), ivec3(0, 1, 0), ivec3(0, 0, 1) };
     ivec3 bounds(width, height, depth);
+    int index = offset.x ? 0 : offset.y ? 1 : /* offset.z ? */ 2;
+    ivec2 inv_index = offset.x ? ivec2(2, 1) : offset.y ? ivec2(2, 0) : /* offset.z ? */ ivec2(1, 0);
 
-    for (size_t i = 0; i < 3; ++i)
-        assert(bmax[i] - bmin[i] == bounds[i]);
+    assert(inv_index[0] != index && inv_index[1] != index);
 
+    int sign = offset.x + offset.y + offset.z;
+    ivec3 u = axis[index] * ivec3(sign < 0 ? bmin[index] - 1 : bmax[index]);
+
+    for (int i = 0; i < bounds[inv_index[0]]; ++i)
+    {
+        for (int j = 0; j < bounds[inv_index[1]]; ++j)
+        {
+            ivec3 s = axis[inv_index[0]] * (bmin[inv_index[0]] + i);
+            ivec3 t = axis[inv_index[1]] * (bmin[inv_index[1]] + j);
+            ivec3 p = s + t + u;
+            if (!offset.y) g_pyramid(p.x, p.z);
+            g_chunk(p.x, p.y, p.z);
+            Ocdelta d(true);
+            modify(this->index(p.x, p.y, p.z), &d, &d);
+        }
+    }
+    bmin += offset;
+    bmax += offset;
+
+    /*
     for (int y = 0; y < height; ++y)
     {
         for (int x = 0; x < width; ++x)
@@ -325,4 +353,6 @@ void World::shift(glm::ivec3 s)
     }
     bmin += ivec3(0, 0, 1);
     bmax += ivec3(0, 0, 1);
+    */
+
 }
