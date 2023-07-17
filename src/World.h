@@ -28,6 +28,7 @@ struct World
     int width, height, depth, plane, volume, chunksize;
     glm::ivec3 bmin, bmax;
 
+    glm::ivec3 index_float(glm::vec3 p) const;
     int index(int x, int y, int z) const;
     int index(int x, int z) const;
     void init(int w, int h, int d, int s);

@@ -259,21 +259,21 @@ void World::modify(int i, const Ocdelta *tree, const Ocdelta *twig)
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
-static int mod(int n, int m)
+static int modulo(int n, int m)
 {
-    return (n + (n / m + 1) * m) % m;
+    return (m + (n % m)) % m;
 }
 
 int World::index(int x, int z) const
 {
-    int i = (mod(z, depth) * width) + mod(x, width);
-    assert(i >= 0 && i < width * depth);
+    int i = (modulo(z, depth) * width) + modulo(x, width);
+    assert(i >= 0 && i < plane);
     return i;
 }
 
 int World::index(int x, int y, int z) const
 {
-    int i = (mod(y, height) * width * depth) + (mod(z, depth) * width) + mod(x, width);
+    int i = (modulo(y, height) * width * depth) + (modulo(z, depth) * width) + modulo(x, width);
     assert(i >= 0 && i < width * height * depth);
     return i;
 }
@@ -297,7 +297,18 @@ void World::g_chunk(int x, int y, int z)
     int j = index(x, z);
     vec3 p = vec3(x * chunksize, (y - (height / 2)) * chunksize, z * chunksize);
     chunk[i] = Ocroot();
-    grow(&chunk[i], p, chunksize, TREE_MAX_DEPTH, &heightmap[j]);
+    grow(&chunk[i], p, (float)chunksize, TREE_MAX_DEPTH, &heightmap[j]);
+}
+
+glm::ivec3 World::index_float(glm::vec3 p) const
+{
+    using glm::vec3;
+    using glm::ivec3;
+
+    vec3 q = p / (float)chunksize;
+    for (int i = 0; i < 3; ++i)
+        if (q[i] < 0.0) q[i] -= 1.0;
+    return ivec3(q); 
 }
 
 void World::shift(glm::ivec3 offset)
@@ -310,7 +321,8 @@ void World::shift(glm::ivec3 offset)
 
     assert(glm::length(vec3(offset)) == 1.0);
 
-    ivec3 axis[] = { ivec3(1, 0, 0), ivec3(0, 1, 0), ivec3(0, 0, 1) };
+    static const ivec3 axis[] = { ivec3(1, 0, 0), ivec3(0, 1, 0), ivec3(0, 0, 1) };
+
     ivec3 bounds(width, height, depth);
     int index = offset.x ? 0 : offset.y ? 1 : /* offset.z ? */ 2;
     ivec2 inv_index = offset.x ? ivec2(2, 1) : offset.y ? ivec2(2, 0) : /* offset.z ? */ ivec2(1, 0);
@@ -335,24 +347,4 @@ void World::shift(glm::ivec3 offset)
     }
     bmin += offset;
     bmax += offset;
-
-    /*
-    for (int y = 0; y < height; ++y)
-    {
-        for (int x = 0; x < width; ++x)
-        {
-            int x2 = bmin.x + x;
-            int y2 = bmin.y + y;
-            int z = bmax.z;
-            int z2 = z;
-            g_pyramid(x2, z2);
-            g_chunk(x2, y2, z2);
-            Ocdelta d1(true), d2(true);
-            modify(index(x2, y2, z2), &d1, &d2);
-        }
-    }
-    bmin += ivec3(0, 0, 1);
-    bmax += ivec3(0, 0, 1);
-    */
-
 }

@@ -445,14 +445,14 @@ static void defragcopy(const Ocroot *from, Ocroot *to, uint32_t f, uint32_t t)
     }
     else if (tree.type() == LEAF)
     {
-        to->tree[t] = Octree(LEAF, tree.offset());
+        to->tree[t] = Octree(LEAF, (uint32_t)tree.offset());
     }
     else if (tree.type() == TWIG)
     {
         if (to->twigs >= to->twigstoragesize)
             to->twig = (Octwig *)realloc(to->twig, (to->twigstoragesize *= 2) * sizeof(Octwig));
 
-        uint32_t pos = to->twigs++;
+        uint32_t pos = (uint32_t)to->twigs++;
         to->tree[t] = Octree(TWIG, pos);
         to->twig[pos] = from->twig[tree.offset()];
     }
@@ -461,12 +461,12 @@ static void defragcopy(const Ocroot *from, Ocroot *to, uint32_t f, uint32_t t)
         if (to->trees + 8 >= to->treestoragesize)
             to->tree = (Octree *)realloc(to->tree, (to->treestoragesize *= 2) * sizeof(Octree));
 
-        uint32_t pos = to->trees;
+        uint32_t pos = (uint32_t)to->trees;
         to->tree[t] = Octree(BRANCH, pos);
         to->trees += 8;
 
         for (int i = 0; i < 8; ++i)
-            defragcopy(from, to, tree.offset() + i, pos + i);
+            defragcopy(from, to, (uint32_t)tree.offset() + i, pos + i);
     }
 }
 
@@ -499,7 +499,7 @@ size_t depth(const Ocroot *root, uint32_t offset)
 
     size_t max = 0;
     for (uint32_t i = 0; i < 8; ++i)
-        max = glm::max(max, depth(root, tree.offset() + i));
+        max = glm::max(max, depth(root, (uint32_t)tree.offset() + i));
     return max + 1;
 } 
 
@@ -533,6 +533,7 @@ static float density(const Ocroot *root, uint32_t offset,
     uint16_t *maj)
 {
     using glm::bvec3;
+    using glm::uvec3;
 
     Octree tree = root->tree[offset];
     if (tree.type() == EMPTY)
@@ -548,8 +549,8 @@ static float density(const Ocroot *root, uint32_t offset,
     else if (tree.type() == TWIG)
     {
         float leafsize = size / (1 << TWIG_LEVELS);
-        vec3 tmin = glm::clamp((cmin - bmin) / leafsize, 0.0f, (float)TWIG_SIZE);
-        vec3 tmax = glm::clamp((cmax - bmin) / leafsize, 0.0f, (float)TWIG_SIZE);
+        uvec3 tmin = uvec3(glm::clamp((cmin - bmin) / leafsize, 0.0f, (float)TWIG_SIZE));
+        uvec3 tmax = uvec3(glm::clamp((cmax - bmin) / leafsize, 0.0f, (float)TWIG_SIZE));
 
         uint16_t cellulose[8];
         size_t leaves = 0;
@@ -572,11 +573,11 @@ static float density(const Ocroot *root, uint32_t offset,
         {
             bvec3 g;
             Octree::cut(i, &g.x, &g.y, &g.z);
-            float halfsize = size * 0.5;
+            float halfsize = size * 0.5f;
             vec3 smin = bmin + vec3(g) * halfsize;
             vec3 smax = smin + halfsize;
             if (!cubesIntersect(cmin, cmax, smin, smax)) continue;
-            sum += density(root, tree.offset() + i, smin, halfsize, cmin, cmax, maj);
+            sum += density(root, (uint32_t)tree.offset() + i, smin, halfsize, cmin, cmax, maj);
             count++;
         }
         assert(count == 1); // Only allow one intersection
@@ -608,7 +609,7 @@ static void lodmm(const Ocroot *from, Ocroot *to, uint32_t f, uint32_t t, size_t
             if (to->twigs >= to->twigstoragesize)
                 to->twig = (Octwig *)realloc(to->twig, (to->twigstoragesize *= 2) * sizeof(Octwig));
 
-            uint32_t pos = to->twigs++;
+            uint32_t pos = (uint32_t)to->twigs++;
             to->tree[t] = Octree(TWIG, pos);
             to->twig[pos] = Octwig();
 
@@ -637,12 +638,12 @@ static void lodmm(const Ocroot *from, Ocroot *to, uint32_t f, uint32_t t, size_t
             if (to->trees + 8 >= to->treestoragesize)
                 to->tree = (Octree *)realloc(to->tree, (to->treestoragesize *= 2) * sizeof(Octree));
 
-            uint32_t pos = to->trees;
+            uint32_t pos = (uint32_t)to->trees;
             to->tree[t] = Octree(BRANCH, pos);
             to->trees += 8;
 
             for (int i = 0; i < 8; ++i)
-                lodmm(from, to, tree.offset() + i, pos + i, depth + 1);
+                lodmm(from, to, (uint32_t)tree.offset() + i, pos + i, depth + 1);
         }
     }
 }

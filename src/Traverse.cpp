@@ -126,7 +126,7 @@ float intersectCube(vec3 a, vec3 b, vec3 cmin, vec3 cmax, bool *intersect)
 
 bool chunkmarch(vec3 alpha, vec3 beta, const World *world, vec3 *sigma)
 {
-    float chunksize = world->chunksize;
+    float chunksize = (float)world->chunksize;
     vec3 chunkmin = vec3(world->bmin * (int)chunksize);
     vec3 chunkmax = vec3(world->bmax * (int)chunksize);
 
@@ -143,7 +143,8 @@ bool chunkmarch(vec3 alpha, vec3 beta, const World *world, vec3 *sigma)
         if (!isInsideCube(p, chunkmin, chunkmax)) 
             return false;
 
-        int i = world->index(p.x / chunksize, p.y / chunksize, p.z / chunksize);
+        vec3 q = world->index_float(p);
+        int i = world->index((int)q.x, (int)q.y, (int)q.z);
 
         if (!isInsideCube(p, world->chunk[i].position, world->chunk[i].position + chunksize))
             return false;

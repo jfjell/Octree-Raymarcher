@@ -167,13 +167,15 @@ void computeTarget(const World *w)
 template <typename F>
 void modify(const ImagCube *imag, World *world, F f)
 {
+    using glm::ivec3;
+
     if (!imag->real) return;
 
     for (int i = 0; i < 8; ++i)
     {
         vec3 p = imag->bmin + vec3(glm::bvec3(i & 4, i & 2, i & 1)) * imag->scale;
-
-        int j = world->index(p.x / world->chunksize, p.y / world->chunksize, p.z / world->chunksize);
+        ivec3 q = world->index_float(p);
+        int j = world->index(q.x, q.y, q.z);
 
         if (!isInsideCube(p, world->chunk[j].position, world->chunk[j].position + (float)world->chunksize)) continue;
 
