@@ -49,8 +49,7 @@ struct Ocdelta
     size_t right;
     bool realloc;
 
-    Ocdelta() = default;
-    Ocdelta(size_t l, size_t r, bool a): left(l), right(r), realloc(a) {}
+    Ocdelta(bool a = false, size_t l = SIZE_MAX, size_t r = 0): left(l), right(r), realloc(a) {}
 };
 
 struct Ocroot

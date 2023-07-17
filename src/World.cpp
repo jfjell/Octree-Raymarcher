@@ -9,49 +9,34 @@
 #include "Traverse.h"
 
 #define TREE_MAX_DEPTH 9
-#define TREE_SIZE 128
 #define PYRAMID_RESOLUTION 64
 
 using glm::vec3;
+using glm::ivec3;
 using glm::mat4;
 
-void World::init(int w, int h, int d)
+void World::init(int w, int h, int d, int s)
 {
     width  = w;
     height = h;
     depth  = d;
     plane  = width * depth;
     volume = plane * height;
+    chunk_size = s;
+
+    bmin = ivec3(0);
+    bmax = ivec3(width, height, depth);
 
     heightmap = new BoundsPyramid[plane];
     for (int z = 0; z < depth; ++z)
-    {
         for (int x = 0; x < width; ++x)
-        {
-            int i = z * width + x;
-            float amplitude = 16;
-            float period = 1.0f / PYRAMID_RESOLUTION;
-            float xshift = (float)x * PYRAMID_RESOLUTION;
-            float yshift = 16.0f;
-            float zshift = (float)z * PYRAMID_RESOLUTION;
-            heightmap[i].init(PYRAMID_RESOLUTION, amplitude, period, xshift, yshift, zshift);
-        }
-    }
+            g_pyramid(x, z);
 
     chunk = new Ocroot[volume];
     for (int z = 0; z < depth; ++z)
-    {
         for (int y = 0; y < height; ++y)
-        {
             for (int x = 0; x < width; ++x)
-            {
-                int i = z * width * height + y * width + x;
-                int j = z * width + x;
-                vec3 p = vec3(x * TREE_SIZE, (y - (height / 2)) * TREE_SIZE, z * TREE_SIZE);
-                grow(&chunk[i], p, TREE_SIZE, TREE_MAX_DEPTH, &heightmap[j]);
-            }
-        }
-    }
+                g_chunk(x, y, z);
 
     order = new int[volume];
     for (int i = 0; i < volume; ++i)
@@ -61,35 +46,35 @@ void World::init(int w, int h, int d)
 extern const float CUBE_VERTICES[8*3];
 extern const unsigned short CUBE_INDICES[6*6];
 
-void World::gpu()
+void World::load_gpu()
 {
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
+    glGenVertexArrays(1, &gpu.vao);
+    glBindVertexArray(gpu.vao);
 
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glGenBuffers(1, &gpu.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, gpu.vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(CUBE_VERTICES), CUBE_VERTICES, GL_STATIC_DRAW);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
     glEnableVertexAttribArray(0);
 
-    glGenBuffers(1, &ebo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    glGenBuffers(1, &gpu.ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gpu.ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(CUBE_INDICES), CUBE_INDICES, GL_STATIC_DRAW);
 
-    ssbotree = new unsigned int[volume];
-    glGenBuffers(volume, ssbotree);
+    gpu.ssbo_tree = new unsigned int[volume];
+    glGenBuffers(volume, gpu.ssbo_tree);
     for (int i = 0; i < volume; ++i)
     {
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbotree[i]);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, gpu.ssbo_tree[i]);
         glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].treestoragesize * sizeof(Octree), chunk[i].tree, GL_STATIC_DRAW); 
         // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssbotree[i]);
     }
 
-    ssbotwig = new unsigned int[volume];
-    glGenBuffers(volume, ssbotwig);
+    gpu.ssbo_twig = new unsigned int[volume];
+    glGenBuffers(volume, gpu.ssbo_twig);
     for (int i = 0; i < volume; ++i)
     {
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbotwig[i]);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, gpu.ssbo_twig[i]);
         glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].twigstoragesize * sizeof(Octwig), chunk[i].twig, GL_STATIC_DRAW); 
         // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssbotwig[i]);
     }
@@ -99,63 +84,71 @@ void World::gpu()
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-    shaderN = Shader(glCreateProgram())
+    gpu.shader_near = Shader(glCreateProgram())
         .vertex("shaders/Parallax.Vertex.glsl")
         .include("shaders/Raymarch.glsl")
         .fragment("shaders/ParallaxN.Fragment.glsl")
         .link();
     
-    pmodel[0] = glGetUniformLocation(shaderN, "model");
-    pmvp[0]   = glGetUniformLocation(shaderN, "mvp");
-    peye[0]   = glGetUniformLocation(shaderN, "eye");
-    pbmin[0]  = glGetUniformLocation(shaderN, "root.pos");
-    psize[0]  = glGetUniformLocation(shaderN, "root.size");
+    gpu.model_near = glGetUniformLocation(gpu.shader_near, "model");
+    gpu.mvp_near   = glGetUniformLocation(gpu.shader_near, "mvp");
+    gpu.eye_near   = glGetUniformLocation(gpu.shader_near, "eye");
+    gpu.bmin_near  = glGetUniformLocation(gpu.shader_near, "root.pos");
+    gpu.size_near  = glGetUniformLocation(gpu.shader_near, "root.size");
 
-    shaderF = Shader(glCreateProgram())
+    gpu.shader_far = Shader(glCreateProgram())
         .vertex("shaders/Parallax.Vertex.glsl")
         .include("shaders/Raymarch.glsl")
         .fragment("shaders/ParallaxF.Fragment.glsl")
         .link();
 
-    pmodel[1] = glGetUniformLocation(shaderF, "model");
-    pmvp[1]   = glGetUniformLocation(shaderF, "mvp");
-    peye[1]   = glGetUniformLocation(shaderF, "eye");
-    pbmin[1]  = glGetUniformLocation(shaderF, "root.pos");
-    psize[1]  = glGetUniformLocation(shaderF, "root.size");
+    gpu.model_far = glGetUniformLocation(gpu.shader_far, "model");
+    gpu.mvp_far   = glGetUniformLocation(gpu.shader_far, "mvp");
+    gpu.eye_far   = glGetUniformLocation(gpu.shader_far, "eye");
+    gpu.bmin_far  = glGetUniformLocation(gpu.shader_far, "root.pos");
+    gpu.size_far  = glGetUniformLocation(gpu.shader_far, "root.size");
 }
 
 void World::deinit()
 {
-    glDeleteVertexArrays(1, &vao);
-    glDeleteBuffers(1, &vbo);
-    glDeleteBuffers(1, &ebo);
-    glDeleteBuffers(volume, ssbotree);
-    glDeleteBuffers(volume, ssbotwig);
-    glDeleteProgram(shaderN);
-    glDeleteProgram(shaderF);
+    glDeleteVertexArrays(1, &gpu.vao);
+    glDeleteBuffers(1, &gpu.vbo);
+    glDeleteBuffers(1, &gpu.ebo);
+    glDeleteBuffers(volume, gpu.ssbo_tree);
+    glDeleteBuffers(volume, gpu.ssbo_twig);
+    glDeleteProgram(gpu.shader_near);
+    glDeleteProgram(gpu.shader_far);
+
+    delete[] gpu.ssbo_tree;
+    delete[] gpu.ssbo_twig;
+
+    for (int i = 0; i < volume; ++i)
+    {
+        free(chunk[i].tree);
+        free(chunk[i].twig);
+    }
+    delete[] chunk;
 
     for (int i = 0; i < plane; ++i)
         heightmap[i].deinit();
 
-    delete[] ssbotree;
-    delete[] ssbotwig;
-    delete[] chunk;
     delete[] heightmap;
+
     delete[] order;
 }
 
-float cubeDF(vec3 p, vec3 bmin, vec3 bmax)
+static float cubeDF(vec3 p, vec3 bmin, vec3 bmax)
 {
     vec3 bmid = (bmax + bmin) * 0.5f;
     return glm::distance(p, bmid);
 }
 
-float chunkDF(vec3 p, const Ocroot *chunk)
+static float chunkDF(vec3 p, const Ocroot *chunk)
 {
     return cubeDF(p, chunk->position, chunk->position + chunk->size);
 }
 
-glm::mat4 SRT(const Ocroot *chunk)
+static glm::mat4 computeSRT(const Ocroot *chunk)
 {
     mat4 T = glm::translate(mat4(1.0), chunk->position);
     mat4 S = glm::scale(mat4(1.0), vec3(chunk->size));
@@ -184,46 +177,46 @@ void World::draw(glm::mat4 mvp, glm::vec3 eye)
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
 
-    glBindVertexArray(vao);
+    glBindVertexArray(gpu.vao);
 
     // Near
-    glUseProgram(shaderN);
+    glUseProgram(gpu.shader_near);
 
-    glUniformMatrix4fv(pmvp[0], 1, GL_FALSE, glm::value_ptr(mvp));
-    glUniform3fv(peye[0], 1, glm::value_ptr(eye));
+    glUniformMatrix4fv(gpu.mvp_near, 1, GL_FALSE, glm::value_ptr(mvp));
+    glUniform3fv(gpu.eye_near, 1, glm::value_ptr(eye));
 
     for (int i = 0; i < midpoint; ++i)
     {
         int j = order[i];
 
-        mat4 srt = SRT(&chunk[j]);
-        glUniformMatrix4fv(pmodel[0], 1, GL_FALSE, glm::value_ptr(srt));
-        glUniform3fv(pbmin[0], 1, glm::value_ptr(chunk[j].position));
-        glUniform1f(psize[0], chunk[j].size);
+        mat4 srt = computeSRT(&chunk[j]);
+        glUniformMatrix4fv(gpu.model_near, 1, GL_FALSE, glm::value_ptr(srt));
+        glUniform3fv(gpu.bmin_near, 1, glm::value_ptr(chunk[j].position));
+        glUniform1f(gpu.size_near, chunk[j].size);
 
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssbotree[j]);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssbotwig[j]);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, gpu.ssbo_tree[j]);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, gpu.ssbo_twig[j]);
 
         glDrawElements(GL_TRIANGLES, sizeof(CUBE_INDICES) / sizeof(unsigned short), GL_UNSIGNED_SHORT, (void *)0);
     }
 
     // Far
-    glUseProgram(shaderF);
+    glUseProgram(gpu.shader_far);
 
-    glUniformMatrix4fv(pmvp[1], 1, GL_FALSE, glm::value_ptr(mvp));
-    glUniform3fv(peye[1], 1, glm::value_ptr(eye));
+    glUniformMatrix4fv(gpu.mvp_far, 1, GL_FALSE, glm::value_ptr(mvp));
+    glUniform3fv(gpu.eye_far, 1, glm::value_ptr(eye));
 
     for (int i = midpoint; i < volume; ++i)
     {
         int j = order[i];
 
-        mat4 srt = SRT(&chunk[j]);
-        glUniformMatrix4fv(pmodel[1], 1, GL_FALSE, glm::value_ptr(srt));
-        glUniform3fv(pbmin[1], 1, glm::value_ptr(chunk[j].position));
-        glUniform1f(psize[1], chunk[j].size);
+        mat4 srt = computeSRT(&chunk[j]);
+        glUniformMatrix4fv(gpu.model_far, 1, GL_FALSE, glm::value_ptr(srt));
+        glUniform3fv(gpu.bmin_far, 1, glm::value_ptr(chunk[j].position));
+        glUniform1f(gpu.size_far, chunk[j].size);
 
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssbotree[j]);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssbotwig[j]);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, gpu.ssbo_tree[j]);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, gpu.ssbo_twig[j]);
 
         glDrawElements(GL_TRIANGLES, sizeof(CUBE_INDICES) / sizeof(unsigned short), GL_UNSIGNED_SHORT, (void *)0);
     }
@@ -233,11 +226,11 @@ void World::draw(glm::mat4 mvp, glm::vec3 eye)
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
-void World::mod(int i, const Ocdelta *tree, const Ocdelta *twig)
+void World::modify(int i, const Ocdelta *tree, const Ocdelta *twig)
 {
     if (tree->left < tree->right || tree->realloc)
     {
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbotree[i]);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, gpu.ssbo_tree[i]);
         if (tree->realloc)
             glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].treestoragesize * sizeof(Octree), chunk[i].tree, GL_STATIC_DRAW); 
         else
@@ -251,7 +244,7 @@ void World::mod(int i, const Ocdelta *tree, const Ocdelta *twig)
 
     if (twig->left < twig->right || twig->realloc)
     {
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbotwig[i]);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, gpu.ssbo_twig[i]);
         if (twig->realloc)
             glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].twigstoragesize * sizeof(Octwig), chunk[i].twig, GL_STATIC_DRAW); 
         else
@@ -264,4 +257,66 @@ void World::mod(int i, const Ocdelta *tree, const Ocdelta *twig)
     }
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
+
+static int rem(int x, int m)
+{
+    return (x + (x / m + 1) * m) % m;
+}
+
+static int index_pl(int x, int z, int w, int d)
+{
+    int i = (rem(z, d) * w) + rem(x, w);
+    assert(i >= 0 && i < w * d);
+    return i;
+}
+
+static int index_vo(int x, int y, int z, int w, int h, int d)
+{
+    int i = (rem(y, h) * w * d) + (rem(z, d) * w) + rem(x, w);
+    assert(i >= 0 && i < w * h * d);
+    return i;
+}
+
+void World::g_pyramid(int x, int z)
+{
+    int i = index_pl(x, z, width, depth);
+    float amplitude = 16;
+    float period = 1.0f / PYRAMID_RESOLUTION;
+    float xshift = (float)x * PYRAMID_RESOLUTION;
+    float yshift = 16.0f;
+    float zshift = (float)z * PYRAMID_RESOLUTION;
+    heightmap[i] = BoundsPyramid();
+    heightmap[i].init(PYRAMID_RESOLUTION, amplitude, period, xshift, yshift, zshift);
+}
+
+void World::g_chunk(int x, int y, int z)
+{
+    int i = index_vo(x, y, z, width, height, depth);
+    int j = index_pl(x, z, width, depth);
+    vec3 p = vec3(x * chunk_size, (y - (height / 2)) * chunk_size, z * chunk_size);
+    chunk[i] = Ocroot();
+    grow(&chunk[i], p, chunk_size, TREE_MAX_DEPTH, &heightmap[j]);
+}
+
+void World::shift(glm::ivec3 s)
+{
+    assert(glm::length(vec3(s)) == 1.0);
+
+    for (int y = 0; y < height; ++y)
+    {
+        for (int x = 0; x < width; ++x)
+        {
+            int x2 = bmin.x + x;
+            int y2 = bmin.y + y;
+            int z = bmax.z;
+            int z2 = z;
+            g_pyramid(x2, z2);
+            g_chunk(x2, y2, z2);
+            Ocdelta d1(true), d2(true);
+            modify(index_vo(x2, y2, z2, width, height, depth), &d1, &d2);
+        }
+    }
+    bmin += ivec3(0, 0, 1);
+    bmax += ivec3(0, 0, 1);
 }

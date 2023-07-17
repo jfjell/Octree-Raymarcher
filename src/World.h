@@ -10,22 +10,32 @@ struct Ocroot;
 struct Ocdelta;
 struct BoundsPyramid;
 
+struct WorldGPUContext
+{
+    unsigned int vao, vbo, ebo;
+    unsigned int shader_near, shader_far;
+    unsigned int *ssbo_tree, *ssbo_twig;
+    int model_near, mvp_near, bmin_near, size_near, eye_near;
+    int model_far, mvp_far, bmin_far, size_far, eye_far;
+};
+
 struct World
 {
     Ocroot *chunk;
     BoundsPyramid *heightmap;
-    int width, height, depth, plane, volume;
-    unsigned int vao, vbo, ebo;
-    unsigned int shaderN, shaderF;
-    unsigned int *ssbotree, *ssbotwig;
+    WorldGPUContext gpu;
     int *order;
-    int pmodel[2], pmvp[2], pbmin[2], psize[2], peye[2];
+    int width, height, depth, plane, volume, chunk_size;
+    glm::ivec3 bmin, bmax;
 
-    void init(int w, int h, int d);
+    void init(int w, int h, int d, int s);
     void deinit();
-    void gpu();
-    void mod(int i, const Ocdelta *tree, const Ocdelta *twig);
+    void load_gpu();
     void draw(glm::mat4 mvp, glm::vec3 eye);
+    void modify(int i, const Ocdelta *tree, const Ocdelta *twig);
+    void g_pyramid(int x, int z);
+    void g_chunk(int x, int y, int z);
+    void shift(glm::ivec3 s);
 };
 
 #endif

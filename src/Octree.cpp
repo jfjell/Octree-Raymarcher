@@ -307,8 +307,7 @@ static void destroyCube(Ocroot *root,
 
 void Ocroot::destroy(glm::vec3 cmin, glm::vec3 cmax, Ocdelta *dtree, Ocdelta *dtwig)
 {
-    *dtree = Ocdelta(SIZE_MAX, 0, false);
-    *dtwig = Ocdelta(SIZE_MAX, 0, false);
+    *dtree = *dtwig = Ocdelta();
     destroyCube(this, 0, position, size, 0, cmin, cmax, dtree, dtwig);
 }
 
@@ -426,15 +425,13 @@ static void buildCube(Ocroot *root,
 
 void Ocroot::build(glm::vec3 cmin, glm::vec3 cmax, uint16_t mat, Ocdelta *dtree, Ocdelta *dtwig)
 {
-    *dtree = Ocdelta(SIZE_MAX, 0, false);
-    *dtwig = Ocdelta(SIZE_MAX, 0, false);
+    *dtree = *dtwig = Ocdelta();
     buildCube(this, 0, position, size, 0, cmin, cmax, mat, dtree, dtwig);
 }
 
 void Ocroot::replace(glm::vec3 cmin, glm::vec3 cmax, uint16_t mat, Ocdelta *dtree, Ocdelta *dtwig)
 {
-    *dtree = Ocdelta(SIZE_MAX, 0, false);
-    *dtwig = Ocdelta(SIZE_MAX, 0, false);
+    *dtree = *dtwig = Ocdelta();
     destroyCube(this, 0, position, size, 0, cmin, cmax, dtree, dtwig);
     buildCube(this, 0, position, size, 0, cmin, cmax, mat, dtree, dtwig);
 }

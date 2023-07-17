@@ -73,9 +73,9 @@ int main()
 
     imag.init(1.0);
 
-    world.init(TREES_X, TREES_Y, TREES_Z);
+    world.init(TREES_X, TREES_Y, TREES_Z, TREE_SIZE);
     print(&world.chunk[0]);
-    world.gpu();
+    world.load_gpu();
 
     gbuffer.init(width, height);
 
@@ -193,7 +193,7 @@ void destroy()
                 if (!cubesIntersect(cmin, cmax, bmin, bmax)) continue;
                 Ocdelta tree, twig;
                 world.chunk[i].destroy(cmin, cmax, &tree, &twig);
-                world.mod(i, &tree, &twig);
+                world.modify(i, &tree, &twig);
             }
         }
     }
@@ -220,7 +220,7 @@ void build()
                 if (!cubesIntersect(cmin, cmax, bmin, bmax)) continue;
                 Ocdelta tree, twig;
                 world.chunk[i].build(cmin, cmax, 5, &tree, &twig);
-                world.mod(i, &tree, &twig);
+                world.modify(i, &tree, &twig);
             }
         }
     }
@@ -247,7 +247,7 @@ void replace()
                 if (!cubesIntersect(cmin, cmax, bmin, bmax)) continue;
                 Ocdelta tree, twig;
                 world.chunk[i].replace(cmin, cmax, 5, &tree, &twig);
-                world.mod(i, &tree, &twig);
+                world.modify(i, &tree, &twig);
             }
         }
     }
@@ -373,8 +373,12 @@ void initializeControls()
         Ocroot r = world.chunk[0].lodmm();
         print(&r);
         world.chunk[0] = r;
-        Ocdelta tree = { 0, 0, true }, twig = {0, 0, true};
-        world.mod(0, &tree, &twig);
+        Ocdelta tree(true), twig(true);
+        world.modify(0, &tree, &twig);
+    });
+    input.bindKey('h', [&]() {
+        world.shift(glm::ivec3(0, 0, 1));
+        // print(&world.chunk[0]);
     });
     input.bindKey(SDLK_SPACE, [&]() { position += glm::vec3(0.f, 1.f, 0.f) * speed; });
     input.bindKey(SDLK_LSHIFT, [&]() { position -= glm::vec3(0.f, 1.f, 0.f) * speed; });
