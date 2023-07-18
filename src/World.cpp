@@ -23,9 +23,10 @@ void World::init(int w, int h, int d, int s)
     plane  = width * depth;
     volume = plane * height;
     chunksize = s;
-
-    bmax = ivec3(w / 2 + w % 2, h / 2 + h % 2, d / 2 + d % 2);
-    bmin = ivec3(-w / 2, -h / 2, -d / 2);
+    
+    ivec3 bound = ivec3(width, height, depth);
+    bmax = bound / 2 + bound % 2;
+    bmin = -bound / 2;
 
     heightmap = new BoundsPyramid[plane];
     for (int z = 0; z < depth; ++z)
@@ -331,16 +332,20 @@ void World::shift(glm::ivec3 offset)
 
     int sign = offset.x + offset.y + offset.z;
     ivec3 u = axis[index] * ivec3(sign < 0 ? bmin[index] - 1 : bmax[index]);
-
+    vec3 ppp = vec3(0); // Previous pyramid point
     for (int i = 0; i < bounds[inv_index[0]]; ++i)
     {
+        ivec3 s = axis[inv_index[0]] * (bmin[inv_index[0]] + i);
         for (int j = 0; j < bounds[inv_index[1]]; ++j)
         {
-            ivec3 s = axis[inv_index[0]] * (bmin[inv_index[0]] + i);
             ivec3 t = axis[inv_index[1]] * (bmin[inv_index[1]] + j);
             ivec3 p = s + t + u;
-            if (!offset.y) g_pyramid(p.x, p.z);
+
+            if (!offset.y && (j == 0 || p.x != ppp.x || p.z != ppp.z))
+                g_pyramid((ppp.x = p.x), (ppp.z = p.z));
+
             g_chunk(p.x, p.y, p.z);
+
             Ocdelta d(true);
             modify(this->index(p.x, p.y, p.z), &d, &d);
         }
