@@ -332,7 +332,7 @@ void World::shift(glm::ivec3 offset)
 
     int sign = offset.x + offset.y + offset.z;
     ivec3 u = axis[index] * ivec3(sign < 0 ? bmin[index] - 1 : bmax[index]);
-    vec3 ppp = vec3(0); // Previous pyramid point
+    ivec3 prev = ivec3(0); // Previous pyramid point
     for (int i = 0; i < bounds[inv_index[0]]; ++i)
     {
         ivec3 s = axis[inv_index[0]] * (bmin[inv_index[0]] + i);
@@ -341,8 +341,11 @@ void World::shift(glm::ivec3 offset)
             ivec3 t = axis[inv_index[1]] * (bmin[inv_index[1]] + j);
             ivec3 p = s + t + u;
 
-            if (!offset.y && (j == 0 || p.x != ppp.x || p.z != ppp.z))
-                g_pyramid((ppp.x = p.x), (ppp.z = p.z));
+            if (!offset.y && (j == 0 || p.x != prev.x || p.z != prev.z)) // First iteration or a new point?
+            {
+                g_pyramid(p.x, p.z);
+                prev = p;
+            }
 
             g_chunk(p.x, p.y, p.z);
 
