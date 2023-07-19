@@ -596,7 +596,7 @@ static void lodmm(const Ocroot *from, Ocroot *to, uint32_t f, uint32_t t, size_t
     }
     else
     {
-        assert (tree.type() == BRANCH);
+        assert(tree.type() == BRANCH);
 
         if (depth == to->depth - TWIG_LEVELS)
         {

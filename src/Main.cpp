@@ -25,6 +25,7 @@
 #include "GBuffer.h"
 #include "Shader.h"
 #include "World.h"
+#include "Worm.h"
 
 SDL_Window *window;
 SDL_GLContext glContext;
@@ -94,6 +95,9 @@ int main()
 
     gbuffer.disable();
 
+    Worm worm;
+    worm.init();
+
     Counter frame, textframe;
     textframe.start();
     frame.start();
@@ -123,6 +127,8 @@ int main()
         computeTarget(&world);
         if (imag.real) 
             imag.draw(mvp);
+
+        worm.draw(mvp);
 
         gbuffer.disable();
         gbuffer.draw();
