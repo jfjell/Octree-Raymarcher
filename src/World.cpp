@@ -96,6 +96,7 @@ void World::load_gpu()
     gpu.eye_near   = glGetUniformLocation(gpu.shader_near, "eye");
     gpu.bmin_near  = glGetUniformLocation(gpu.shader_near, "root.pos");
     gpu.size_near  = glGetUniformLocation(gpu.shader_near, "root.size");
+    gpu.depth_near = glGetUniformLocation(gpu.shader_near, "rdepth");
 
     gpu.shader_far = Shader(glCreateProgram())
         .vertex("shaders/Parallax.Vertex.glsl")
@@ -108,6 +109,7 @@ void World::load_gpu()
     gpu.eye_far   = glGetUniformLocation(gpu.shader_far, "eye");
     gpu.bmin_far  = glGetUniformLocation(gpu.shader_far, "root.pos");
     gpu.size_far  = glGetUniformLocation(gpu.shader_far, "root.size");
+    gpu.depth_far = glGetUniformLocation(gpu.shader_far, "rdepth");
 }
 
 void World::deinit()
@@ -178,6 +180,9 @@ void World::draw(glm::mat4 mvp, glm::vec3 eye)
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
 
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     glBindVertexArray(gpu.vao);
 
     // Near
@@ -194,6 +199,7 @@ void World::draw(glm::mat4 mvp, glm::vec3 eye)
         glUniformMatrix4fv(gpu.model_near, 1, GL_FALSE, glm::value_ptr(srt));
         glUniform3fv(gpu.bmin_near, 1, glm::value_ptr(chunk[j].position));
         glUniform1f(gpu.size_near, chunk[j].size);
+        glUniform1i(gpu.depth_near, chunk[j].depth);
 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, gpu.ssbo_tree[j]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, gpu.ssbo_twig[j]);
@@ -215,6 +221,7 @@ void World::draw(glm::mat4 mvp, glm::vec3 eye)
         glUniformMatrix4fv(gpu.model_far, 1, GL_FALSE, glm::value_ptr(srt));
         glUniform3fv(gpu.bmin_far, 1, glm::value_ptr(chunk[j].position));
         glUniform1f(gpu.size_far, chunk[j].size);
+        glUniform1i(gpu.depth_far, chunk[j].depth);
 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, gpu.ssbo_tree[j]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, gpu.ssbo_twig[j]);

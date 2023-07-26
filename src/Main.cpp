@@ -44,6 +44,7 @@ Text text;
 World world;
 GBuffer gbuffer;
 Counter sw;
+bool cursor = false;
 
 using glm::vec3;
 
@@ -355,20 +356,24 @@ void initializeControls()
     input.bindKey(SDLK_TAB, [&]() { 
         SDL_ShowCursor(SDL_ENABLE);
         SDL_SetRelativeMouseMode(SDL_FALSE);
+        cursor = true;
     });
 
     input.bind(SDL_MOUSEBUTTONDOWN, [&](SDL_Event&e) {
         if (e.button.button != SDL_BUTTON_LEFT) return;
         SDL_ShowCursor(SDL_DISABLE);
         SDL_SetRelativeMouseMode(SDL_TRUE);
+        cursor = false;
     });
 
     input.bind(SDL_MOUSEMOTION, [&](SDL_Event& e) {
-        horzAngle -= (float)e.motion.xrel * sensitivity;
-        vertAngle -= (float)e.motion.yrel * sensitivity;
-        float orth = glm::radians(90.f);
-        if (vertAngle >= orth) vertAngle = orth;
-        if (vertAngle <= -orth) vertAngle = -orth;
+        if (!cursor) {
+            horzAngle -= (float)e.motion.xrel * sensitivity;
+            vertAngle -= (float)e.motion.yrel * sensitivity;
+            float orth = glm::radians(90.f);
+            if (vertAngle >= orth) vertAngle = orth;
+            if (vertAngle <= -orth) vertAngle = -orth;
+        }
     });
 }
 

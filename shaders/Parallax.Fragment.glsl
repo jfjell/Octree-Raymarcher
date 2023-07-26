@@ -27,6 +27,7 @@ struct Leaf {
     uint  index;
 };
 
+uniform int rdepth;
 uniform vec3 eye;
 uniform mat4x4 mvp;
 uniform Root root;
@@ -111,15 +112,38 @@ Leaf traverse(vec3 p) {
     return tree;
 }
 
-bool twigmarch(uint index, vec3 a, vec3 b, vec3 g, vec3 cmin, float size, float leafsize, out float s, out Leaf tree) {
+const vec4 materialLookup[] = {
+    vec4(0, 0, 0, 0), // Empty
+    vec4(0.5, 0.5, 0.5, 1), // Stone
+    vec4(0.7, 0.5, 0.3, 1), // Dirt
+    vec4(0.7, 0.8, 0.5, 1), // Sand
+    vec4(0.2, 0.6, 0.4, 1), // Grass
+    vec4(0.8, 0.1, 0.1, 1), // Custom
+    vec4(0.1, 0.3, 0.8, 0.5)  // Water
+};
+
+vec4 Bark(uint i) {
+    return materialLookup[i];
+}
+
+
+bool twigmarch(uint index, uint ignore,
+    vec3 a, vec3 b, vec3 g, 
+    vec3 cmin, float size, float leafsize, 
+    out float s, out Leaf leaf) {
+
+    vec3 cmax = cmin + size;
+    vec3 imin = vec3(0);
+    vec3 imax = vec3(TWIG_SIZE - 1);
+
     float t = 0.0;
-    for (int stw = 0; stw < MAX_TWIG_STEPS; ++stw) {
+    for (int _step = 0; _step < MAX_TWIG_STEPS; ++_step) {
         vec3 p = a + b * t;
-        if (!isInsideCube(p, cmin, cmin + size)) break;
+        if (!isInsideCube(p, cmin, cmax)) break;
 
         ivec3 off = ivec3((vec3(p - cmin) * (1.0 / leafsize))); // Integer coordinates
 
-        if (!isInsideCube(off, vec3(0), vec3(TWIG_SIZE-1))) break;
+        if (!isInsideCube(off, imin, imax)) break;
 
         vec3 leafmin = cmin + off * leafsize;
         vec3 leafmax = leafmin + leafsize;
@@ -129,73 +153,68 @@ bool twigmarch(uint index, vec3 a, vec3 b, vec3 g, vec3 cmin, float size, float 
         uint mask = 0xffff;
 
         uint bark = (Twig(index + word) >> shift) & mask;
-        if (bark != 0) {
+        if (bark != 0 && bark != ignore) {
             // Hit!
-            s = t - EPS;
-            tree = Leaf(leafmin, leafsize, bark);
+            s = t;
+            leaf = Leaf(leafmin, leafsize, bark);
             return true;
         } else {
             // Missed, go next
-            float stepsize = cubeEscapeDistance(p, g, leafmin, leafmax);
-            t += stepsize + EPS;
+            float escape = cubeEscapeDistance(p, g, leafmin, leafmax) + EPS;
+            t += escape;
         }
     }
     s = t;
     return false;
 }
 
-float treemarch(vec3 a, vec3 b, vec3 g, out Leaf treeHit) {
+float treemarch(vec3 a, vec3 b, vec3 g, uint ignore, out Leaf hit) {
     vec3 rmin = root.pos;
     vec3 rmax = root.pos + root.size;
 
     float t = 0.0;
-
-    for (int tst = 0; tst < MAX_STEPS; ++tst) {
+    for (int _step = 0; _step < MAX_STEPS; ++_step) {
         vec3 p = a + b * t;
         if (!isInsideCube(p, rmin, rmax)) break;
 
         Leaf tree = traverse(p);
+        float escape = cubeEscapeDistance(p, g, tree.pos, tree.pos + tree.size) + EPS;
         uint value = Tree(tree.index);
         uint type = Tree_type(value);
         if (type == EMPTY) {
             // Advance to the next subtree, or out of the tree
-            float escape = cubeEscapeDistance(p, g, tree.pos, tree.pos + tree.size);
-            t += escape + EPS;
+            t += escape;
         } else if (type == LEAF) {
             // Found a match
-            uint material = Tree_offset(value);
-            treeHit = Leaf(tree.pos, tree.size, material);
-            return t - EPS;
+            uint bark = Tree_offset(value);
+            if (bark != ignore) {
+                hit = Leaf(tree.pos, tree.size, bark);
+                return t;
+            } else {
+                t += escape;
+            }
         } else if (type == TWIG) {
             float leafsize = tree.size / (1 << TWIG_LEVELS);
             float s = 0.0;
-            if (twigmarch(Twig_offset(value), p, b, g, tree.pos, tree.size, leafsize, s, treeHit)) {
+            if (twigmarch(Twig_offset(value), ignore, p, b, g, tree.pos, tree.size, leafsize, s, hit)) {
                 return t + s;
             } else {
-                t += s;
+                t += escape;
             }
         }
     }
-    return MAX_DIST;
+    return -1.0;
 }
 
-#define MATERIALS 6
-
-const vec4 materialLookup[MATERIALS] = {
-    vec4(0.5, 0.5, 0.5, 1), // Stone
-    vec4(0.7, 0.5, 0.3, 1), // Dirt
-    vec4(0.7, 0.8, 0.5, 1), // Sand
-    vec4(0.2, 0.6, 0.4, 1), // Grass
-    vec4(0.8, 0.1, 0.1, 1), // Custom
-    vec4(0.1, 0.3, 0.8, 0.5)  // Water
-};
+bool isTranslucent(vec4 c) {
+    return c.a < 1.0;
+}
 
 layout (location = 0) in vec3 hitpos;
 
 out vec4 fragcolor;
 
 void main() {
-    Leaf tree;
     vec3 beta = normalize(hitpos - eye);
     vec3 gamma = 1.0 / beta;
     vec3 alpha = eye;
@@ -208,25 +227,44 @@ void main() {
         alpha = (distance(alpha, a1) < distance(alpha, a2)) ? a1 : a2;
     }
 
-    float sigma = treemarch(alpha, beta, gamma, tree);
+    Leaf hit;
+    float sigma = treemarch(alpha, beta, gamma, 0, hit);
 
-    if (sigma < MAX_DIST) {
-        vec3 point = alpha + beta * (sigma + EPS);
-        // vec3 relative = (point - root.pos) / root.size;
-        // vec3 texturecolor = texture(sampler, relative.xz).rgb;
-        vec3 normal = cubeNormal(point, tree.pos, tree.pos + tree.size);
-        // vec4 color = vec4(texturecolor + normal * 0.5, 1);
-        uint material = tree.index - 1;
-        vec4 color = vec4(materialLookup[material].xyz + normal * 0.1, 1);
-        fragcolor = color;
+    if (sigma < 0) discard; // Out of the tree
 
-        float z = 1.0 / distance(point, eye);
-        float near = 1.0 / 0.1;
-        float far = 1.0 / 10000.0;
-        float depth = (z - near) / (far - near);
-        gl_FragDepth = depth;
-    } else {
-        gl_FragDepth = 1.0;
-        discard;
+    vec3 point = alpha + sigma * beta;
+
+    float z = 1.0 / distance(point, eye);
+    float near = 1.0 / 0.1;
+    float far = 1.0 / 10000.0;
+    float depth = (z - near) / (far - near);
+    gl_FragDepth = depth;
+
+    vec4 bark = Bark(hit.index);
+
+    vec3 normal = cubeNormal(point, hit.pos, hit.pos + hit.size);
+    vec4 color = vec4(bark.a * (0.9 * bark.rgb + 0.1 * normal), bark.a);
+    if (isTranslucent(bark)) {
+        // Hit something translucent, continue marching until we hit something solid
+        uint ignore = hit.index;
+        while (isTranslucent(color)) {
+            float tau = treemarch(point, beta, gamma, ignore, hit);
+
+            if (tau < 0) break; // Out of the tree
+
+            color.rgb += (1.0 - color.a) * bark.a * bark.rgb / tau;
+            color.a += bark.a;
+
+            vec4 bark = Bark(hit.index);
+            if (!isTranslucent(bark)) {
+                vec3 normal = cubeNormal(point, hit.pos, hit.pos + hit.size);
+                color.rgb += (1.0 - color.a) * (0.9 * bark.rgb + 0.1 * normal);
+                color.a = 1;
+            } else {
+                point += tau * beta;
+                ignore = hit.index;
+            }
+        }
     }
+    fragcolor = color;
 }

@@ -15,8 +15,8 @@ struct WorldGPUContext
     unsigned int vao, vbo, ebo;
     unsigned int shader_near, shader_far;
     unsigned int *ssbo_tree, *ssbo_twig;
-    int model_near, mvp_near, bmin_near, size_near, eye_near;
-    int model_far, mvp_far, bmin_far, size_far, eye_far;
+    int model_near, mvp_near, bmin_near, size_near, eye_near, depth_near;
+    int model_far, mvp_far, bmin_far, size_far, eye_far, depth_far;
 };
 
 struct World
