@@ -8,9 +8,8 @@ CLANG_CPPFLAGS=-Iinclude \
 	-Werror \
 	-DSDL_MAIN_HANDLED \
 	-D_CRT_SECURE_NO_WARNINGS \
-	-std=c++17 \
+	-std=c++20 \
 	-O0 \
-	-fno-exceptions \
 	-g
 CLANG_LDFLAGS=-Llib \
 	-lSDL2main \

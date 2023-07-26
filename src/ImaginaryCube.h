@@ -13,7 +13,7 @@ struct ImaginaryCube
     glm::vec3 bmin, scale;
     bool real;
 
-    void init(float scale);
+    void init(glm::vec3 scale);
     void deinit();
     void position(glm::vec3 bmid);
     void draw(glm::mat4 mvp);

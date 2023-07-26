@@ -3,8 +3,8 @@ uniform samplerCube tex;
 
 in vec3 uvw;
 
-out vec4 color;
+out vec4 fragcolor;
 
 void main() {
-    color = texture(tex, uvw).rgba;
+    fragcolor = texture(tex, uvw).rgba;
 }

@@ -69,12 +69,15 @@ double Counter::max()
     return val;
 }
 
+#include <stacktrace>
+#include <iostream>
+
 [[noreturn]] void die(const char *format, ...)
 {
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
-    exit(-1);
+    abort();
 }
 
 char * readfile(const char *path)

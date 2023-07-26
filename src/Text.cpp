@@ -48,8 +48,10 @@ void Text::init(const char *fontpath, int size, int width, int height)
         .fragment("shaders/Text.Fragment.glsl")
         .link();
 
+    glUseProgram(shader);
     this->sampler = glGetUniformLocation(this->shader, "tex");
     glUniform1i(this->sampler, 0);
+    glUseProgram(0);
 
     glGenVertexArrays(1, &this->vao);
     glBindVertexArray(this->vao);

@@ -10,9 +10,9 @@ out vec3 uvw;
 
 void main() {
     int cube = gl_VertexID / 8;
-    float x = 0; // cos(t + cube) * 0.3;
-    float y = sin(t + cube) * 1.3;
-    float z = 0;
-    gl_Position = mvp * model * vec4(vertexcoord, 1) + vec4(x, y, z, 0);
+    float x = 0;
+    float z = cos(t + cube) * 0.3;
+    float y = sin(t + cube) * 0.5;
+    gl_Position = mvp * model * vec4(vertexcoord + vec3(x, y, z), 1);
     uvw = uvwcoord;
 }

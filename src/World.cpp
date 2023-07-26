@@ -87,8 +87,8 @@ void World::load_gpu()
 
     gpu.shader_near = Shader(glCreateProgram())
         .vertex("shaders/Parallax.Vertex.glsl")
-        .include("shaders/Raymarch.glsl")
-        .fragment("shaders/ParallaxN.Fragment.glsl")
+        .include("shaders/ZLE.glsl")
+        .fragment("shaders/Parallax.Fragment.glsl")
         .link();
     
     gpu.model_near = glGetUniformLocation(gpu.shader_near, "model");
@@ -99,8 +99,8 @@ void World::load_gpu()
 
     gpu.shader_far = Shader(glCreateProgram())
         .vertex("shaders/Parallax.Vertex.glsl")
-        .include("shaders/Raymarch.glsl")
-        .fragment("shaders/ParallaxF.Fragment.glsl")
+        .include("shaders/ZGR.glsl")
+        .fragment("shaders/Parallax.Fragment.glsl")
         .link();
 
     gpu.model_far = glGetUniformLocation(gpu.shader_far, "model");
@@ -299,6 +299,12 @@ void World::g_chunk(int x, int y, int z)
     vec3 p = vec3(x, y, z) * (float)chunksize;
     chunk[i] = Ocroot();
     grow(&chunk[i], p, (float)chunksize, TREE_MAX_DEPTH, &heightmap[j]);
+
+    // Add water at y=6
+    vec3 watermin = chunk[i].position;
+    vec3 watermax = vec3(chunk[i].position.x + chunk[i].size, 6, chunk[i].position.z + chunk[i].size);
+    Ocdelta d;
+    chunk[i].build(watermin, watermax, 6, &d, &d);
 }
 
 glm::ivec3 World::index_float(glm::vec3 p) const

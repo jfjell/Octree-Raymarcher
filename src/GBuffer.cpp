@@ -72,7 +72,7 @@ void GBuffer::init(int w, int h)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(QUAD_INDICES), QUAD_INDICES, GL_STATIC_DRAW);
 
     glBindVertexArray(0);
-    glBindBuffer(GL_VERTEX_ARRAY, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     tc = glGetUniformLocation(shader, "colors");

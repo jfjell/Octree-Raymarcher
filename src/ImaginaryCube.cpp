@@ -11,7 +11,7 @@ using glm::mat4;
 extern const float CUBE_VERTICES[8*3];
 extern const unsigned short CUBE_INDICES[6*6];
 
-void ImaginaryCube::init(float scale)
+void ImaginaryCube::init(vec3 scale)
 {
     this->bmin = vec3(0.0);
     this->scale = vec3(scale);

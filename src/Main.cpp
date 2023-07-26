@@ -64,7 +64,7 @@ int main()
 
     text.init("C:/Windows/Fonts/arial.ttf", 18, width, height);
 
-    imag.init(1.0);
+    imag.init(glm::vec3(3.0, 1.0, 0.5));
 
     world.init(5, 5, 5, 128);
     print(&world.chunk[0]);
@@ -385,7 +385,5 @@ void glCallback(GLenum source,
     (void)length;
     (void)argp;
 
-    fprintf(stderr, "OpenGL: type = 0x%x, severity = 0x%x, message = %s\n", type, severity, message);
-    if (severity == GL_DEBUG_TYPE_ERROR) 
-        die("\n");
+    die("OpenGL: type = 0x%x, severity = 0x%x, message = %s\n", type, severity, message);
 }

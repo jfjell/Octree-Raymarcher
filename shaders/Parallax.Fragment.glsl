@@ -1,6 +1,4 @@
 
-#extension AMD_gpu_shader_int16 : enable
-
 #define EMPTY  0
 #define LEAF   1
 #define BRANCH 2
@@ -9,11 +7,12 @@
 #define TWIG_SIZE 4
 #define TWIG_LEVELS 2
 #define TWIG_WORDS 64
+#define TWIG_DWORDS 32
 
 #define MAX_DEPTH 32
 #define MAX_STEPS 512
 #define MAX_TWIG_STEPS 24
-#define MAX_DIST 4069.0
+#define MAX_DIST 4096.0
 
 const float EPS = 1.0 / 4096.0;
 
@@ -22,13 +21,12 @@ struct Root {
     float size;
 };
 
-struct Tree {
+struct Leaf {
     vec3  pos;
     float size;
     uint  index;
 };
 
-uniform sampler2D sampler;
 uniform vec3 eye;
 uniform mat4x4 mvp;
 uniform Root root;
@@ -38,8 +36,16 @@ layout(std430, binding = 2) restrict readonly buffer ssboTree {
 };
 
 layout(std430, binding = 3) restrict readonly buffer ssboTwig {
-    uint16_t Twig_SSBO[];
+    uint Twig_SSBO[];
 };
+
+uint Tree(uint i) {
+    return Tree_SSBO[i];
+}
+
+uint Twig(uint i) {
+    return Twig_SSBO[i];
+}
 
 uint Tree_type(uint t) {
     return t >> 30;
@@ -54,11 +60,15 @@ uint Tree_branch(bool xg, bool yg, bool zg) {
 }
 
 uint Twig_offset(uint t) {
-    return Tree_offset(t) * TWIG_WORDS;
+    return Tree_offset(t) * TWIG_DWORDS;
 }
 
-uint Twig_word(uint x, uint y, uint z) {
-    return z * 16 + y * 4 + x;
+uint Twig_dword(uint x, uint y, uint z) {
+    return (z * 16 + y * 4 + x) / 2;
+}
+
+uint Twig_shift(uint i) {
+    return i % 2 != 0 ? 16 : 0;
 }
 
 bool isInsideCube(vec3 p, vec3 cmin, vec3 cmax) {
@@ -85,10 +95,10 @@ vec3 cubeNormal(vec3 p, vec3 cmin, vec3 cmax) {
     return normalize(normal);
 }
 
-Tree traverse(vec3 p) {
-    Tree tree = Tree(root.pos, root.size, 0);
+Leaf traverse(vec3 p) {
+    Leaf tree = Leaf(root.pos, root.size, 0);
     for (int d = 0; d < MAX_DEPTH; ++d) {
-        uint value = Tree_SSBO[tree.index];
+        uint value = Tree(tree.index);
         uint type = Tree_type(value);
         if (type != BRANCH) break;
         float halfsize = tree.size * 0.5;
@@ -96,12 +106,12 @@ Tree traverse(vec3 p) {
         bvec3 geq = greaterThanEqual(p, mid);
         uint branch = Tree_branch(geq.x, geq.y, geq.z);
         vec3 nextpos = tree.pos + vec3(geq) * halfsize;
-        tree = Tree(nextpos, halfsize, Tree_offset(value) + branch);
+        tree = Leaf(nextpos, halfsize, Tree_offset(value) + branch);
     }
     return tree;
 }
 
-bool twigmarch(uint index, vec3 a, vec3 b, vec3 g, vec3 cmin, float size, float leafsize, out float s, out Tree tree) {
+bool twigmarch(uint index, vec3 a, vec3 b, vec3 g, vec3 cmin, float size, float leafsize, out float s, out Leaf tree) {
     float t = 0.0;
     for (int stw = 0; stw < MAX_TWIG_STEPS; ++stw) {
         vec3 p = a + b * t;
@@ -111,15 +121,18 @@ bool twigmarch(uint index, vec3 a, vec3 b, vec3 g, vec3 cmin, float size, float 
 
         if (!isInsideCube(off, vec3(0), vec3(TWIG_SIZE-1))) break;
 
-        uint word = Twig_word(off.x, off.y, off.z);
         vec3 leafmin = cmin + off * leafsize;
         vec3 leafmax = leafmin + leafsize;
 
-        uint bark = Twig_SSBO[index + word];
+        uint word = Twig_dword(off.x, off.y, off.z);
+        uint shift = Twig_shift(word);
+        uint mask = 0xffff;
+
+        uint bark = (Twig(index + word) >> shift) & mask;
         if (bark != 0) {
             // Hit!
             s = t - EPS;
-            tree = Tree(leafmin, leafsize, bark);
+            tree = Leaf(leafmin, leafsize, bark);
             return true;
         } else {
             // Missed, go next
@@ -131,7 +144,7 @@ bool twigmarch(uint index, vec3 a, vec3 b, vec3 g, vec3 cmin, float size, float 
     return false;
 }
 
-float treemarch(vec3 a, vec3 b, vec3 g, out Tree treeHit) {
+float treemarch(vec3 a, vec3 b, vec3 g, out Leaf treeHit) {
     vec3 rmin = root.pos;
     vec3 rmax = root.pos + root.size;
 
@@ -141,8 +154,8 @@ float treemarch(vec3 a, vec3 b, vec3 g, out Tree treeHit) {
         vec3 p = a + b * t;
         if (!isInsideCube(p, rmin, rmax)) break;
 
-        Tree tree = traverse(p);
-        uint value = Tree_SSBO[tree.index];
+        Leaf tree = traverse(p);
+        uint value = Tree(tree.index);
         uint type = Tree_type(value);
         if (type == EMPTY) {
             // Advance to the next subtree, or out of the tree
@@ -151,7 +164,7 @@ float treemarch(vec3 a, vec3 b, vec3 g, out Tree treeHit) {
         } else if (type == LEAF) {
             // Found a match
             uint material = Tree_offset(value);
-            treeHit = Tree(tree.pos, tree.size, material);
+            treeHit = Leaf(tree.pos, tree.size, material);
             return t - EPS;
         } else if (type == TWIG) {
             float leafsize = tree.size / (1 << TWIG_LEVELS);
@@ -166,12 +179,54 @@ float treemarch(vec3 a, vec3 b, vec3 g, out Tree treeHit) {
     return MAX_DIST;
 }
 
-#define MATERIALS 5
+#define MATERIALS 6
 
 const vec4 materialLookup[MATERIALS] = {
     vec4(0.5, 0.5, 0.5, 1), // Stone
     vec4(0.7, 0.5, 0.3, 1), // Dirt
     vec4(0.7, 0.8, 0.5, 1), // Sand
     vec4(0.2, 0.6, 0.4, 1), // Grass
-    vec4(0.8, 0.1, 0.1, 1)  // Custom
+    vec4(0.8, 0.1, 0.1, 1), // Custom
+    vec4(0.1, 0.3, 0.8, 0.5)  // Water
 };
+
+layout (location = 0) in vec3 hitpos;
+
+out vec4 fragcolor;
+
+void main() {
+    Leaf tree;
+    vec3 beta = normalize(hitpos - eye);
+    vec3 gamma = 1.0 / beta;
+    vec3 alpha = eye;
+    if (!isInsideCube(eye, root.pos, root.pos + root.size)) {
+        // Fix the cube going invisible in case we hit the far vertex (if we happen to be very close to the edge)
+        float t1 = cubeEscapeDistance(hitpos - beta * EPS, -gamma, root.pos, root.pos + root.size);
+        float t2 = cubeEscapeDistance(hitpos + beta * EPS, +gamma, root.pos, root.pos + root.size);
+        vec3 a1 = hitpos - beta * t1;
+        vec3 a2 = hitpos + beta * t2;
+        alpha = (distance(alpha, a1) < distance(alpha, a2)) ? a1 : a2;
+    }
+
+    float sigma = treemarch(alpha, beta, gamma, tree);
+
+    if (sigma < MAX_DIST) {
+        vec3 point = alpha + beta * (sigma + EPS);
+        // vec3 relative = (point - root.pos) / root.size;
+        // vec3 texturecolor = texture(sampler, relative.xz).rgb;
+        vec3 normal = cubeNormal(point, tree.pos, tree.pos + tree.size);
+        // vec4 color = vec4(texturecolor + normal * 0.5, 1);
+        uint material = tree.index - 1;
+        vec4 color = vec4(materialLookup[material].xyz + normal * 0.1, 1);
+        fragcolor = color;
+
+        float z = 1.0 / distance(point, eye);
+        float near = 1.0 / 0.1;
+        float far = 1.0 / 10000.0;
+        float depth = (z - near) / (far - near);
+        gl_FragDepth = depth;
+    } else {
+        gl_FragDepth = 1.0;
+        discard;
+    }
+}
