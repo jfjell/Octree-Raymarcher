@@ -127,8 +127,10 @@ float intersectCube(vec3 a, vec3 b, vec3 cmin, vec3 cmax, bool *intersect)
 bool chunkmarch(vec3 alpha, vec3 beta, const World *world, vec3 *sigma)
 {
     float chunksize = (float)world->chunksize;
-    vec3 chunkmin = vec3(world->bmin * (int)chunksize);
-    vec3 chunkmax = vec3(world->bmax * (int)chunksize);
+    vec3 bounds = vec3(world->width, world->height, world->depth);
+    vec3 chunkcoordmax = world->chunkcoordmin + ivec3(bounds);
+    vec3 chunkmin = vec3(world->chunkcoordmin * (int)chunksize);
+    vec3 chunkmax = vec3(chunkcoordmax * chunksize);
 
     float t = 0.0f;
     bool intersect = true;

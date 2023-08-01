@@ -15,6 +15,7 @@ using glm::vec3;
 using glm::ivec3;
 using glm::mat4;
 
+
 void World::init(int w, int h, int d, int s)
 {
     width  = w;
@@ -25,23 +26,29 @@ void World::init(int w, int h, int d, int s)
     chunksize = s;
     
     ivec3 bound = ivec3(width, height, depth);
-    bmax = bound / 2 + bound % 2;
-    bmin = -bound / 2;
+    chunkcoordmin = vec3(0);
 
     heightmap = new BoundsPyramid[plane];
     for (int z = 0; z < depth; ++z)
         for (int x = 0; x < width; ++x)
-            g_pyramid(bmin.x+x, bmin.z+z);
+            g_pyramid(chunkcoordmin.x+x, chunkcoordmin.z+z);
 
     chunk = new Ocroot[volume];
     for (int z = 0; z < depth; ++z)
         for (int y = 0; y < height; ++y)
             for (int x = 0; x < width; ++x)
-                g_chunk(bmin.x+x, bmin.y+y, bmin.z+z);
+                g_chunk(chunkcoordmin.x+x, chunkcoordmin.y+y, chunkcoordmin.z+z);
 
-    order = new int[volume];
-    for (int i = 0; i < volume; ++i)
-        order[i] = i;
+    gcd = new GPUChunk[volume];
+}
+
+GPUChunk::GPUChunk(const Ocroot *r, RootAllocation a)
+{
+    bmin = r->position;
+    tr_reg = a.tree.region;
+    tr_off = a.tree.offset / sizeof(uint32_t);
+    tw_reg = a.twig.region;
+    tw_off = a.twig.offset / sizeof(uint32_t);
 }
 
 extern const float CUBE_VERTICES[8*3];
@@ -49,87 +56,65 @@ extern const unsigned short CUBE_INDICES[6*6];
 
 void World::load_gpu()
 {
-    glGenVertexArrays(1, &gpu.vao);
-    glBindVertexArray(gpu.vao);
+    allocator.init(volume);
+    for (int i = 0; i < volume; ++i)
+        gcd[i] = GPUChunk(&chunk[i], allocator.alloc(i, &chunk[i]));
 
-    glGenBuffers(1, &gpu.vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, gpu.vbo);
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(CUBE_VERTICES), CUBE_VERTICES, GL_STATIC_DRAW);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
     glEnableVertexAttribArray(0);
 
-    glGenBuffers(1, &gpu.ebo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gpu.ebo);
+    glGenBuffers(1, &ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(CUBE_INDICES), CUBE_INDICES, GL_STATIC_DRAW);
 
-    gpu.ssbo_tree = new unsigned int[volume];
-    glGenBuffers(volume, gpu.ssbo_tree);
-    for (int i = 0; i < volume; ++i)
-    {
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, gpu.ssbo_tree[i]);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].treestoragesize * sizeof(Octree), chunk[i].tree, GL_STATIC_DRAW); 
-        // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssbotree[i]);
-    }
-
-    gpu.ssbo_twig = new unsigned int[volume];
-    glGenBuffers(volume, gpu.ssbo_twig);
-    for (int i = 0; i < volume; ++i)
-    {
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, gpu.ssbo_twig[i]);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].twigstoragesize * sizeof(Octwig), chunk[i].twig, GL_STATIC_DRAW); 
-        // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssbotwig[i]);
-    }
+    glGenBuffers(1, &chunk_ssbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunk_ssbo);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, volume * sizeof(GPUChunk), gcd, GL_STATIC_DRAW);
 
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-    gpu.shader_near = Shader(glCreateProgram())
+    shader = Shader(glCreateProgram())
         .vertex("shaders/Parallax.Vertex.glsl")
-        .include("shaders/ZLE.glsl")
-        .fragment("shaders/Parallax.Fragment.glsl")
-        .link();
-    
-    gpu.model_near = glGetUniformLocation(gpu.shader_near, "model");
-    gpu.mvp_near   = glGetUniformLocation(gpu.shader_near, "mvp");
-    gpu.eye_near   = glGetUniformLocation(gpu.shader_near, "eye");
-    gpu.bmin_near  = glGetUniformLocation(gpu.shader_near, "root.pos");
-    gpu.size_near  = glGetUniformLocation(gpu.shader_near, "root.size");
-    gpu.depth_near = glGetUniformLocation(gpu.shader_near, "rdepth");
-    gpu.width_near = glGetUniformLocation(gpu.shader_near, "width");
-
-    gpu.shader_far = Shader(glCreateProgram())
-        .vertex("shaders/Parallax.Vertex.glsl")
-        .include("shaders/ZGR.glsl")
-        .fragment("shaders/Parallax.Fragment.glsl")
+        .fragment("shaders/ParallaxChunk.Frag.glsl")
         .link();
 
-    gpu.model_far = glGetUniformLocation(gpu.shader_far, "model");
-    gpu.mvp_far   = glGetUniformLocation(gpu.shader_far, "mvp");
-    gpu.eye_far   = glGetUniformLocation(gpu.shader_far, "eye");
-    gpu.bmin_far  = glGetUniformLocation(gpu.shader_far, "root.pos");
-    gpu.size_far  = glGetUniformLocation(gpu.shader_far, "root.size");
-    gpu.depth_far = glGetUniformLocation(gpu.shader_far, "rdepth");
-    gpu.width_far = glGetUniformLocation(gpu.shader_far, "width");
+    chunkmin_ul = glGetUniformLocation(shader, "chunkmin");
+    chunkmax_ul = glGetUniformLocation(shader, "chunkmax");
+    chunksize_ul = glGetUniformLocation(shader, "chunksize");
+    w_ul = glGetUniformLocation(shader, "csw");
+    h_ul = glGetUniformLocation(shader, "csh");
+    d_ul = glGetUniformLocation(shader, "csd");
+    eye_ul = glGetUniformLocation(shader, "eye");
+    model_ul = glGetUniformLocation(shader, "model");
+    mvp_ul = glGetUniformLocation(shader, "mvp");
 
-    allocator.init(volume);
-    for (int i = 0; i < volume; ++i)
-        allocator.alloc(i, &chunk[i]);
+    assert(chunkmin_ul != -1);
+    assert(chunkmax_ul != -1);
+    assert(chunksize_ul != -1);
+    assert(w_ul != -1);
+    assert(h_ul != -1);
+    assert(d_ul != -1);
+    assert(eye_ul != -1);
+    assert(model_ul != -1);
+    assert(mvp_ul != -1);
 }
 
 void World::deinit()
 {
-    glDeleteVertexArrays(1, &gpu.vao);
-    glDeleteBuffers(1, &gpu.vbo);
-    glDeleteBuffers(1, &gpu.ebo);
-    glDeleteBuffers(volume, gpu.ssbo_tree);
-    glDeleteBuffers(volume, gpu.ssbo_twig);
-    glDeleteProgram(gpu.shader_near);
-    glDeleteProgram(gpu.shader_far);
-
-    delete[] gpu.ssbo_tree;
-    delete[] gpu.ssbo_twig;
+    glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(1, &vbo);
+    glDeleteBuffers(1, &ebo);
+    glDeleteBuffers(1, &chunk_ssbo);
+    glDeleteProgram(shader);
 
     for (int i = 0; i < volume; ++i)
     {
@@ -140,140 +125,69 @@ void World::deinit()
 
     for (int i = 0; i < plane; ++i)
         heightmap[i].deinit();
-
     delete[] heightmap;
 
-    delete[] order;
+    delete[] gcd;
+
+    allocator.release();
 }
 
-static float cubeDF(vec3 p, vec3 bmin, vec3 bmax)
+static mat4 srt(vec3 chunkmin, vec3 bounds)
 {
-    vec3 bmid = (bmax + bmin) * 0.5f;
-    return glm::distance(p, bmid);
+    mat4 t = glm::translate(mat4(1.0), chunkmin);
+    mat4 s = glm::scale(mat4(1.0), bounds);
+    mat4 r = mat4(1.0);
+    mat4 srt = t * r * s;
+    return srt;
 }
 
-static float chunkDF(vec3 p, const Ocroot *chunk)
-{
-    return cubeDF(p, chunk->position, chunk->position + chunk->size);
-}
+#include <iostream>
+#include <glm/gtx/io.hpp>
 
-static glm::mat4 computeSRT(const Ocroot *chunk)
+void World::draw(mat4 mvp, vec3 eye, unsigned int bark_ssbo)
 {
-    mat4 T = glm::translate(mat4(1.0), chunk->position);
-    mat4 S = glm::scale(mat4(1.0), vec3(chunk->size));
-    mat4 R = mat4(1.0);
-    mat4 SRT = T * R * S;
-    return SRT;
-}
+    vec3 bounds = vec3(width, height, depth);
+    vec3 chunkmin = chunkcoordmin * chunksize;
+    vec3 chunkmax = chunkmin + bounds * (float)chunksize;
+    mat4 model = srt(chunkmin, bounds * (float)chunksize);
 
-void World::draw(glm::mat4 mvp, glm::vec3 eye, int w, unsigned int ssbo_color)
-{
-    auto less = [=](int i, int j) { return chunkDF(eye, &chunk[i]) < chunkDF(eye, &chunk[j]); };
-    std::sort(&order[0], &order[volume], less);
-
-    int midpoint = volume;
-    for (int i = 0; i < midpoint; ++i)
-    {
-        int j = order[i];
-        if (!isInsideCube(eye, chunk[j].position, chunk[j].position + chunk[j].size))
-            midpoint = i;
-    }
+    using namespace std;
 
     glDisable(GL_STENCIL_TEST);
-
-    glEnable(GL_CULL_FACE);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_BLEND);
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
 
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBindVertexArray(vao);
+    glUseProgram(shader);
 
-    glBindVertexArray(gpu.vao);
+    glUniform3fv(chunkmin_ul, 1, glm::value_ptr(chunkmin));
+    glUniform3fv(chunkmax_ul, 1, glm::value_ptr(chunkmax));
+    glUniform1f(chunksize_ul, (float)chunksize);
+    glUniform1i(w_ul, width);
+    glUniform1i(h_ul, height);
+    glUniform1i(d_ul, depth);
+    glUniform3fv(eye_ul, 1, glm::value_ptr(eye));
+    glUniformMatrix4fv(model_ul, 1, GL_FALSE, glm::value_ptr(model));
+    glUniformMatrix4fv(mvp_ul, 1, GL_FALSE, glm::value_ptr(mvp));
 
-    // Near
-    glUseProgram(gpu.shader_near);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, chunk_ssbo);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, bark_ssbo);
+    allocator.bind();
 
-    glUniformMatrix4fv(gpu.mvp_near, 1, GL_FALSE, glm::value_ptr(mvp));
-    glUniform3fv(gpu.eye_near, 1, glm::value_ptr(eye));
-    glUniform1i(gpu.width_near, w);
-
-    for (int i = 0; i < midpoint; ++i)
-    {
-        int j = order[i];
-
-        mat4 srt = computeSRT(&chunk[j]);
-        glUniformMatrix4fv(gpu.model_near, 1, GL_FALSE, glm::value_ptr(srt));
-        glUniform3fv(gpu.bmin_near, 1, glm::value_ptr(chunk[j].position));
-        glUniform1f(gpu.size_near, chunk[j].size);
-        glUniform1i(gpu.depth_near, chunk[j].depth);
-
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, gpu.ssbo_tree[j]);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, gpu.ssbo_twig[j]);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssbo_color);
-
-        glDrawElements(GL_TRIANGLES, sizeof(CUBE_INDICES) / sizeof(unsigned short), GL_UNSIGNED_SHORT, (void *)0);
-    }
-
-    // Far
-    glUseProgram(gpu.shader_far);
-
-    glUniformMatrix4fv(gpu.mvp_far, 1, GL_FALSE, glm::value_ptr(mvp));
-    glUniform3fv(gpu.eye_far, 1, glm::value_ptr(eye));
-    glUniform1i(gpu.width_far, w);
-
-    for (int i = midpoint; i < volume; ++i)
-    {
-        int j = order[i];
-
-        mat4 srt = computeSRT(&chunk[j]);
-        glUniformMatrix4fv(gpu.model_far, 1, GL_FALSE, glm::value_ptr(srt));
-        glUniform3fv(gpu.bmin_far, 1, glm::value_ptr(chunk[j].position));
-        glUniform1f(gpu.size_far, chunk[j].size);
-        glUniform1i(gpu.depth_far, chunk[j].depth);
-
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, gpu.ssbo_tree[j]);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, gpu.ssbo_twig[j]);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssbo_color);
-
-        glDrawElements(GL_TRIANGLES, sizeof(CUBE_INDICES) / sizeof(unsigned short), GL_UNSIGNED_SHORT, (void *)0);
-    }
+    glDrawElements(GL_TRIANGLES, sizeof(CUBE_INDICES) / sizeof(unsigned short), GL_UNSIGNED_SHORT, (void *)0);
 
     glBindVertexArray(0);
     glUseProgram(0);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
 void World::modify(int i, const Ocdelta *tree, const Ocdelta *twig)
 {
-    if (tree->left < tree->right || tree->realloc)
-    {
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, gpu.ssbo_tree[i]);
-        if (tree->realloc)
-            glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].treestoragesize * sizeof(Octree), chunk[i].tree, GL_STATIC_DRAW); 
-        else
-        {
-            size_t offset = tree->left * sizeof(Octree);
-            size_t size = (tree->right - tree->left) * sizeof(Octree);
-            void *pointer = &chunk[i].tree[tree->left];
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, size, pointer);
-        }
-    }
-
-    if (twig->left < twig->right || twig->realloc)
-    {
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, gpu.ssbo_twig[i]);
-        if (twig->realloc)
-            glBufferData(GL_SHADER_STORAGE_BUFFER, chunk[i].twigstoragesize * sizeof(Octwig), chunk[i].twig, GL_STATIC_DRAW); 
-        else
-        {
-            size_t offset = twig->left * sizeof(Octwig);
-            size_t size = (twig->right - twig->left) * sizeof(Octwig);
-            void *pointer = &chunk[i].twig[twig->left];
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, size, pointer);
-        }
-    }
-
+    gcd[i] = GPUChunk(&chunk[i], allocator.subst(i, &chunk[i], tree, twig));
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunk_ssbo);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, i * sizeof(GPUChunk), sizeof(GPUChunk), &gcd[i]);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
@@ -348,20 +262,21 @@ void World::shift(glm::ivec3 offset)
     static const ivec3 axis[] = { ivec3(1, 0, 0), ivec3(0, 1, 0), ivec3(0, 0, 1) };
 
     ivec3 bounds(width, height, depth);
+    vec3 chunkcoordmax = chunkcoordmin + bounds;
     int index = offset.x ? 0 : offset.y ? 1 : /* offset.z ? */ 2;
     ivec2 inv_index = offset.x ? ivec2(2, 1) : offset.y ? ivec2(2, 0) : /* offset.z ? */ ivec2(1, 0);
 
     assert(inv_index[0] != index && inv_index[1] != index);
 
     int sign = offset.x + offset.y + offset.z;
-    ivec3 u = axis[index] * ivec3(sign < 0 ? bmin[index] - 1 : bmax[index]);
+    ivec3 u = axis[index] * ivec3(sign < 0 ? chunkcoordmin[index] - 1 : chunkcoordmax[index]);
     ivec3 prev = ivec3(0); // Previous pyramid point
     for (int i = 0; i < bounds[inv_index[0]]; ++i)
     {
-        ivec3 s = axis[inv_index[0]] * (bmin[inv_index[0]] + i);
+        ivec3 s = axis[inv_index[0]] * (chunkcoordmin[inv_index[0]] + i);
         for (int j = 0; j < bounds[inv_index[1]]; ++j)
         {
-            ivec3 t = axis[inv_index[1]] * (bmin[inv_index[1]] + j);
+            ivec3 t = axis[inv_index[1]] * (chunkcoordmin[inv_index[1]] + j);
             ivec3 p = s + t + u;
 
             if (!offset.y && (j == 0 || p.x != prev.x || p.z != prev.z)) // First iteration or a new point?
@@ -377,6 +292,5 @@ void World::shift(glm::ivec3 offset)
         }
     }
 
-    bmin += offset;
-    bmax += offset;
+    chunkcoordmin += offset;
 }

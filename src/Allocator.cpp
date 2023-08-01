@@ -6,8 +6,8 @@
 
 void RootAllocator::init(int chunks)
 {
-    tree.init(chunks, 1, 2);
-    twig.init(chunks, 1, 3);
+    tree.init(chunks, 1, 4);
+    twig.init(chunks, 1, 5);
 }
 
 void RootAllocator::release()
@@ -27,9 +27,9 @@ void RootAllocator::bind()
 
 RootAllocation RootAllocator::alloc(int key, const Ocroot *root)
 {
-    Allocation t = tree.alloc(key, root->tree, 
+    Allocation t = tree.alloc(key, (char *)root->tree, 
         root->treestoragesize * sizeof(Octree), root->trees * sizeof(Octree));
-    Allocation w = twig.alloc(key, root->twig, 
+    Allocation w = twig.alloc(key, (char *)root->twig, 
         root->twigstoragesize * sizeof(Octwig), root->twigs * sizeof(Octwig));
     return RootAllocation(t, w);
 }
@@ -40,16 +40,16 @@ RootAllocation RootAllocator::subst(int key, const Ocroot *root,
     RootAllocation a(tree.allocation[key], twig.allocation[key]);
 
     if (dt->realloc)
-        a.tree = tree.alloc(key, root->tree, 
+        a.tree = tree.alloc(key, (char *)root->tree, 
             root->treestoragesize * sizeof(Octree), root->trees * sizeof(Octree));
     else if (dt->left < dt->right)
-        tree.subst(key, root->tree, dt->left * sizeof(Octree), dt->right * sizeof(Octree));
+        tree.subst(key, (char *)root->tree, dt->left * sizeof(Octree), dt->right * sizeof(Octree));
 
     if (dw->realloc)
-        a.twig = twig.alloc(key, root->twig,
+        a.twig = twig.alloc(key, (char *)root->twig,
             root->twigstoragesize * sizeof(Octwig), root->twigs * sizeof(Octwig));
     else if (dw->left < dw->right)
-        twig.subst(key, root->twig, dw->left * sizeof(Octwig), dw->right * sizeof(Octwig));
+        twig.subst(key, (char *)root->twig, dw->left * sizeof(Octwig), dw->right * sizeof(Octwig));
 
     return a;
 }
@@ -81,7 +81,7 @@ void Allocator::release()
     delete[] region;
 }
 
-Allocation Allocator::alloc(int key, const void *bytes, ssize_t bytecount, ssize_t copycount)
+Allocation Allocator::alloc(int key, const char *bytes, ssize_t bytecount, ssize_t copycount)
 {
     if (allocation[key].region != -1)
         free(key);
@@ -89,7 +89,7 @@ Allocation Allocator::alloc(int key, const void *bytes, ssize_t bytecount, ssize
     ssize_t reg = 0;
     // Find the smallest region
     for (ssize_t i = 1; i < regions; ++i)
-        if (region[i].rightmost < region[reg].rightmost)
+        if (region[i].count < region[reg].count)
             reg = i;
 
     ssize_t off = region[reg].alloc(bytes, bytecount, copycount);
@@ -98,11 +98,11 @@ Allocation Allocator::alloc(int key, const void *bytes, ssize_t bytecount, ssize
     return allocation[key];
 }
 
-void Allocator::subst(int key, const void *bytes, ssize_t left, ssize_t right)
+void Allocator::subst(int key, const char *bytes, ssize_t left, ssize_t right)
 {
     Allocation a = allocation[key];
     assert(a.region != -1);
-    region[a.region].subst(bytes, a.offset, left, right);
+    region[a.region].subst(&bytes[left], a.offset, left, right);
 }
 
 void Allocator::free(int key)
@@ -116,17 +116,17 @@ void Allocator::free(int key)
 void Region::init(unsigned int index)
 {
     this->index = index;
-    count = 4096;
-    rightmost = 0;
+    size = 4096;
+    count = 0;
     freechunk.head = nullptr;
     
     glGenBuffers(1, &ssbo);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, count, NULL, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, size, NULL, GL_STATIC_DRAW);
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-    freechunk.give(0, count);
+    freechunk.give(0, size);
 }
 
 void Region::release()
@@ -139,21 +139,21 @@ void Region::grow()
 {
     const ssize_t MAX_SIZE = INT_MAX;
 
-    ssize_t nextcount = count * 2;
-    assert(nextcount <= MAX_SIZE);
+    ssize_t nextsize = size * 2;
+    assert(nextsize <= MAX_SIZE);
 
-    char *prev = new char[rightmost];
+    char *prev = new char[count];
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
-    glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, rightmost, prev);
+    glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, count, prev);
 
-    glBufferData(GL_SHADER_STORAGE_BUFFER, nextcount, NULL, GL_STATIC_DRAW);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, rightmost, prev);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, nextsize, NULL, GL_STATIC_DRAW);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, count, prev);
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-    freechunk.give(count, count);
+    freechunk.give(size, size);
 
-    count = nextcount;
+    size = nextsize;
 
     delete[] prev;
 }
@@ -168,8 +168,9 @@ ssize_t Region::alloc(const void *bytes, ssize_t bytecount, ssize_t copycount)
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, copycount, bytes);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-    ssize_t nextright = offset + bytecount;
-    if (rightmost < nextright) rightmost = nextright; 
+    ssize_t nextcount = offset + bytecount;
+    if (count < nextcount) count = nextcount; 
+
     return offset;
 }
 
@@ -177,14 +178,14 @@ void Region::subst(const void *bytes, ssize_t offset, ssize_t left, ssize_t righ
 {
     ssize_t delta = right - left;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, delta, bytes);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset + left, delta, bytes);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
 void Region::free(ssize_t offset, ssize_t count)
 {
     freechunk.give(offset, count);
-    if (rightmost == offset + count) rightmost = offset;
+    if (this->count == offset + count) this->count = offset;
 }
 
 void LinkedFreeChunkList::release()
@@ -212,7 +213,7 @@ ssize_t LinkedFreeChunkList::take(ssize_t count)
 
 LinkedFreeChunk * LinkedFreeChunkList::give(LinkedFreeChunk *chunk, ssize_t start, ssize_t end)
 {
-    if (!chunk)
+    if (!chunk) 
         // Reached the end of the list
         return new LinkedFreeChunk(start, end, nullptr);
     if (end < chunk->start)
@@ -260,5 +261,6 @@ LinkedFreeChunk * LinkedFreeChunkList::take(LinkedFreeChunk *chunk, ssize_t coun
     }
 
     // This one is too small => check the next one in the list
-    return take(chunk->next, count, offset);
+    chunk->next = take(chunk->next, count, offset);
+    return chunk;
 }

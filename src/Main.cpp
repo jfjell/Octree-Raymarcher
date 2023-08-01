@@ -67,7 +67,7 @@ int main()
 
     imag.init(glm::vec3(3.0, 1.0, 0.5));
 
-    world.init(5, 5, 5, 128);
+    world.init(4, 4, 4, 128);
     print(&world.chunk[0]);
     world.load_gpu();
 
@@ -103,16 +103,11 @@ int main()
     textframe.start();
     frame.start();
 
-    unsigned int ssbo_color = 0;
-    glGenBuffers(1, &ssbo_color);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_color);
-    int ssbo_color_dwords = width * height * 2;
-    int ssbo_color_bytes = ssbo_color_dwords * 4;
-    uint32_t *ssbo_color_buf = new uint32_t[ssbo_color_dwords];
-    memset(ssbo_color_buf, 0, ssbo_color_bytes);
-
-    glBufferData(GL_SHADER_STORAGE_BUFFER, ssbo_color_bytes, ssbo_color_buf, GL_DYNAMIC_DRAW); 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssbo_color);
+    unsigned int bark_ssbo = 0;
+    glGenBuffers(1, &bark_ssbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, bark_ssbo);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4, NULL, GL_STATIC_DRAW); 
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
     while (running) 
     {
@@ -125,14 +120,11 @@ int main()
 
         gbuffer.enable();
 
-        glClearColor(0.0f, .0f, .0f, 1.f);
+        glClearColor(0.2f, .1f, .4f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_color);
-        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, ssbo_color_bytes, ssbo_color_buf); 
-
         int culled = 0;
-        world.draw(mvp, position, width, ssbo_color);
+        world.draw(mvp, position, bark_ssbo);
 
         glDisable(GL_CULL_FACE);
         glDisable(GL_STENCIL_TEST);

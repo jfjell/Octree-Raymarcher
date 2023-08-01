@@ -33,7 +33,7 @@ class Region
 {
 public:
     LinkedFreeChunkList freechunk;
-    ssize_t count, rightmost;
+    ssize_t size, count;
     unsigned int ssbo, index;
 
     void init(unsigned int index);
@@ -61,8 +61,8 @@ public:
 
     void init(int keys, int regions, unsigned int index);
     void release();
-    Allocation alloc(int key, const void *bytes, ssize_t bytecount, ssize_t copycount);
-    void subst(int key, const void *bytes, ssize_t left, ssize_t right);
+    Allocation alloc(int key, const char *bytes, ssize_t bytecount, ssize_t copycount);
+    void subst(int key, const char *bytes, ssize_t left, ssize_t right);
     void free(int key);
 };
 
