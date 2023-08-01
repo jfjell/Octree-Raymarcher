@@ -11,8 +11,11 @@
 
 #define MAX_DEPTH 32
 #define MAX_STEPS 512
-#define MAX_TWIG_STEPS 24
+#define MAX_TWIG_STEPS 64
 #define MAX_DIST 4096.0
+
+#define NEAR 0.125
+#define FAR 8192
 
 const float EPS = 1.0 / 4096.0;
 
@@ -27,6 +30,9 @@ struct Leaf {
     uint  index;
 };
 
+uniform vec3 rpos;
+uniform float rsize;
+uniform int width;
 uniform int rdepth;
 uniform vec3 eye;
 uniform mat4x4 mvp;
@@ -207,25 +213,66 @@ float treemarch(vec3 a, vec3 b, vec3 g, uint ignore, out Leaf hit) {
 }
 
 bool isTranslucent(vec4 c) {
-    return c.a < 1.0;
+    return c.a < 0.9;
 }
 
 layout (location = 0) in vec3 hitpos;
 
 out vec4 fragcolor;
 
+struct Stingray {
+    float sigma; // Distance
+    uint skin; // Material
+};
+
+layout (std430, binding = 4) restrict volatile buffer SSBO_STINGRAY {
+    Stingray Ray[];
+};
+
+vec4 IntToVec4(uint rgba) {
+    float r = float(rgba / 16777216) / 255;
+    float g = float((rgba / 65536) % 256) / 255;
+    float b = float((rgba / 256) % 256) / 255;
+    float a = float((rgba % 256)) / 255;
+    return vec4(r, g, b, a);
+}
+
+uint Vec4ToInt(vec4 rgba) {
+    uint r = uint(rgba.r * 255) * 16777216;
+    uint g = uint(rgba.g * 255) * 65536;
+    uint b = uint(rgba.b * 255) * 256;
+    uint a = uint(rgba.a * 255);
+    return r | g | b | a;
+}
+
 void main() {
+    vec3 rmin = root.pos;
+    vec3 rmax = rmin + root.size;
+
     vec3 beta = normalize(hitpos - eye);
     vec3 gamma = 1.0 / beta;
     vec3 alpha = eye;
-    if (!isInsideCube(eye, root.pos, root.pos + root.size)) {
+    if (!isInsideCube(eye, rmin, rmax)) {
         // Fix the cube going invisible in case we hit the far vertex (if we happen to be very close to the edge)
-        float t1 = cubeEscapeDistance(hitpos - beta * EPS, -gamma, root.pos, root.pos + root.size);
-        float t2 = cubeEscapeDistance(hitpos + beta * EPS, +gamma, root.pos, root.pos + root.size);
+        float t1 = cubeEscapeDistance(hitpos - beta * EPS, -gamma, rmin, rmax);
+        float t2 = cubeEscapeDistance(hitpos + beta * EPS, +gamma, rmin, rmax);
         vec3 a1 = hitpos - beta * t1;
         vec3 a2 = hitpos + beta * t2;
         alpha = (distance(alpha, a1) < distance(alpha, a2)) ? a1 : a2;
     }
+
+    /*
+    vec3 Cd = vec3(0);
+    float Ad = 0; 
+    vec3 point = alpha;
+    uint ignore = 0;
+    while (Ad < 1.0 - EPS) {
+        Leaf hit;
+        float sigma = treemarch(point, beta, gamma, ignore, hit);
+        vec3 nextpoint = point + sigma * beta;
+        vec4 bark = Bark(hit.index);
+    }
+    */
 
     Leaf hit;
     float sigma = treemarch(alpha, beta, gamma, 0, hit);
@@ -234,37 +281,116 @@ void main() {
 
     vec3 point = alpha + sigma * beta;
 
-    float z = 1.0 / distance(point, eye);
-    float near = 1.0 / 0.1;
-    float far = 1.0 / 10000.0;
-    float depth = (z - near) / (far - near);
-    gl_FragDepth = depth;
-
     vec4 bark = Bark(hit.index);
 
-    vec3 normal = cubeNormal(point, hit.pos, hit.pos + hit.size);
-    vec4 color = vec4(bark.a * (0.9 * bark.rgb + 0.1 * normal), bark.a);
-    if (isTranslucent(bark)) {
-        // Hit something translucent, continue marching until we hit something solid
+    int pixelcoord = (int(gl_FragCoord.y) * width) + int(gl_FragCoord.x);
+    Stingray prevray = Ray[pixelcoord];
+    vec4 deadbark = Bark(prevray.skin);
+    
+    float leafsize = root.size / (1 << rdepth);
+    vec4 color = vec4(0);
+    if (!isTranslucent(bark)) {
+        // Hit something solid, set the color to the material and add the normal as a small factor
+        vec3 normal = cubeNormal(point, hit.pos, hit.pos + hit.size);
+        color.rgb = (1.0 - deadbark.a * prevray.sigma) * (0.9 * bark.rgb + 0.1 * normal) + (deadbark.a * prevray.sigma * deadbark.rgb);
+        color.a = 1;
+
+        Ray[pixelcoord] = Stingray(0, 0);
+
+        fragcolor = color;
+
+        float inv_z = 1.0 / distance(point, eye);
+        float inv_near = 1.0 / NEAR;
+        float inv_far = 1.0 / FAR;
+        float depth = (inv_z - inv_near) / (inv_far - inv_near);
+        gl_FragDepth = depth;
+    } else {
+        // Hit something translucent, continue marching until we hit something solid, 
         uint ignore = hit.index;
-        while (isTranslucent(color)) {
-            float tau = treemarch(point, beta, gamma, ignore, hit);
+        Leaf hit2;
+        float sigma2 = treemarch(point, beta, gamma, ignore, hit2);
 
-            if (tau < 0) break; // Out of the tree
+        if (sigma2 < 0) {
+            // Exited out of the tree, add the distance to the exit
+            float escape = cubeEscapeDistance(point, gamma, rmin, rmax);
+            Ray[pixelcoord] = Stingray(escape + prevray.sigma, hit.index);
+            discard;
+        } else {
+            vec3 point2 = point + beta * sigma2;
+            vec4 bark2 = Bark(hit2.index);
+            if (!isTranslucent(bark2)) {
+                // Hit something solid
+                vec3 normal2 = cubeNormal(point2, hit2.pos, hit2.pos + hit2.size);
 
-            color.rgb += (1.0 - color.a) * bark.a * bark.rgb / tau;
-            color.a += bark.a;
-
-            vec4 bark = Bark(hit.index);
-            if (!isTranslucent(bark)) {
-                vec3 normal = cubeNormal(point, hit.pos, hit.pos + hit.size);
-                color.rgb += (1.0 - color.a) * (0.9 * bark.rgb + 0.1 * normal);
+                vec3 bottomcolor = 0.9 * bark2.rgb + 0.1 * normal2;
+                vec3 liquidcolor = bark.rgb;
+                float liquidscale = (prevray.sigma + sigma2) * bark.a;
+                float bottomscale = 1.0 - liquidscale;
+                color.rgb = bottomcolor * bottomscale + liquidcolor * liquidscale;
                 color.a = 1;
+
+                Ray[pixelcoord] = Stingray(0, 0);
+
+                fragcolor = color;
+
+                float inv_z = 1.0 / distance(point2, eye);
+                float inv_near = 1.0 / NEAR;
+                float inv_far = 1.0 / FAR;
+                float depth = (inv_z - inv_near) / (inv_far - inv_near);
+                gl_FragDepth = depth;
             } else {
-                point += tau * beta;
-                ignore = hit.index;
+                // Should not happen
+                color = vec4(1, 0, 0, 1);
+                fragcolor = color;
+
+                float inv_z = 1.0 / distance(point2, eye);
+                float inv_near = 1.0 / NEAR;
+                float inv_far = 1.0 / FAR;
+                float depth = (inv_z - inv_near) / (inv_far - inv_near);
+                gl_FragDepth = depth;
             }
         }
     }
-    fragcolor = color;
+        
+        /*
+        //?
+            color.rgb = (1.0 - deadbark.a) * prevray.sigma * (bark.a * sigma * bark.rgb);
+
+        while (isTranslucent(color)) {
+            // Step until the next material
+            float tau = treemarch(point, beta, gamma, ignore, hit);
+
+            if (tau < 0) {
+                float a = (1.0 - color.a) * bark.a * escape / leafsize; 
+                color.rgb += a * bark.rgb;
+                color.a += a;
+                break;
+            }
+
+            float a = (1.0 - color.a) * bark.a * tau / leafsize; 
+            color.rgb += a * bark.rgb;
+            color.a += a;
+
+            vec4 bark = Bark(hit.index);
+
+            if (!isTranslucent(bark)) {
+                // Hit something solid
+                vec3 normal = cubeNormal(point, hit.pos, hit.pos + hit.size);
+                color.rgb += (1.0 - color.a) * (0.9 * bark.rgb + 0.1 * normal);
+                color.a = 1;
+                break;
+            }
+            point += tau * beta;
+            ignore = hit.index;
+        }
+    }
+
+    color.rgb = (1.0 - prevcolor.a) * color.a * color.rgb + (1.0 - color.a) * prevcolor.a * prevcolor.rgb;
+    color.a += prevcolor.a;
+
+    Opacity[coord] = RGBA8888Vec4ToInt(color);
+
+    if (isTranslucent(color)) discard;
+    */
+
 }

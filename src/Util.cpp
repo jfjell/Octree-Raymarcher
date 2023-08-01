@@ -69,9 +69,6 @@ double Counter::max()
     return val;
 }
 
-#include <stacktrace>
-#include <iostream>
-
 [[noreturn]] void die(const char *format, ...)
 {
     va_list args;

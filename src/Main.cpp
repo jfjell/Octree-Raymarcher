@@ -103,6 +103,17 @@ int main()
     textframe.start();
     frame.start();
 
+    unsigned int ssbo_color = 0;
+    glGenBuffers(1, &ssbo_color);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_color);
+    int ssbo_color_dwords = width * height * 2;
+    int ssbo_color_bytes = ssbo_color_dwords * 4;
+    uint32_t *ssbo_color_buf = new uint32_t[ssbo_color_dwords];
+    memset(ssbo_color_buf, 0, ssbo_color_bytes);
+
+    glBufferData(GL_SHADER_STORAGE_BUFFER, ssbo_color_bytes, ssbo_color_buf, GL_DYNAMIC_DRAW); 
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssbo_color);
+
     while (running) 
     {
         input.poll();
@@ -114,11 +125,14 @@ int main()
 
         gbuffer.enable();
 
-        glClearColor(0.1f, .4f, .8f, 1.f);
+        glClearColor(0.0f, .0f, .0f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_color);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, ssbo_color_bytes, ssbo_color_buf); 
+
         int culled = 0;
-        world.draw(mvp, position);
+        world.draw(mvp, position, width, ssbo_color);
 
         glDisable(GL_CULL_FACE);
         glDisable(GL_STENCIL_TEST);

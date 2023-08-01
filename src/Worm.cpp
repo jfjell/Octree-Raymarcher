@@ -64,7 +64,7 @@ void Worm::draw(glm::mat4x4 mvp)
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, tex);
 
-    glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, (void *)0);
+    glDrawElements(GL_TRIANGLES, (int)mesh.indices.size(), GL_UNSIGNED_INT, (void *)0);
 
     glUseProgram(0);
     glBindVertexArray(0);

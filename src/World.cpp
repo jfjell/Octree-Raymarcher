@@ -8,8 +8,8 @@
 #include "Shader.h"
 #include "Traverse.h"
 
-#define TREE_MAX_DEPTH 9
-#define PYRAMID_RESOLUTION 64
+#define TREE_MAX_DEPTH 8
+#define PYRAMID_RESOLUTION 256
 
 using glm::vec3;
 using glm::ivec3;
@@ -97,6 +97,7 @@ void World::load_gpu()
     gpu.bmin_near  = glGetUniformLocation(gpu.shader_near, "root.pos");
     gpu.size_near  = glGetUniformLocation(gpu.shader_near, "root.size");
     gpu.depth_near = glGetUniformLocation(gpu.shader_near, "rdepth");
+    gpu.width_near = glGetUniformLocation(gpu.shader_near, "width");
 
     gpu.shader_far = Shader(glCreateProgram())
         .vertex("shaders/Parallax.Vertex.glsl")
@@ -110,6 +111,11 @@ void World::load_gpu()
     gpu.bmin_far  = glGetUniformLocation(gpu.shader_far, "root.pos");
     gpu.size_far  = glGetUniformLocation(gpu.shader_far, "root.size");
     gpu.depth_far = glGetUniformLocation(gpu.shader_far, "rdepth");
+    gpu.width_far = glGetUniformLocation(gpu.shader_far, "width");
+
+    allocator.init(volume);
+    for (int i = 0; i < volume; ++i)
+        allocator.alloc(i, &chunk[i]);
 }
 
 void World::deinit()
@@ -160,7 +166,7 @@ static glm::mat4 computeSRT(const Ocroot *chunk)
     return SRT;
 }
 
-void World::draw(glm::mat4 mvp, glm::vec3 eye)
+void World::draw(glm::mat4 mvp, glm::vec3 eye, int w, unsigned int ssbo_color)
 {
     auto less = [=](int i, int j) { return chunkDF(eye, &chunk[i]) < chunkDF(eye, &chunk[j]); };
     std::sort(&order[0], &order[volume], less);
@@ -190,6 +196,7 @@ void World::draw(glm::mat4 mvp, glm::vec3 eye)
 
     glUniformMatrix4fv(gpu.mvp_near, 1, GL_FALSE, glm::value_ptr(mvp));
     glUniform3fv(gpu.eye_near, 1, glm::value_ptr(eye));
+    glUniform1i(gpu.width_near, w);
 
     for (int i = 0; i < midpoint; ++i)
     {
@@ -203,6 +210,7 @@ void World::draw(glm::mat4 mvp, glm::vec3 eye)
 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, gpu.ssbo_tree[j]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, gpu.ssbo_twig[j]);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssbo_color);
 
         glDrawElements(GL_TRIANGLES, sizeof(CUBE_INDICES) / sizeof(unsigned short), GL_UNSIGNED_SHORT, (void *)0);
     }
@@ -212,6 +220,7 @@ void World::draw(glm::mat4 mvp, glm::vec3 eye)
 
     glUniformMatrix4fv(gpu.mvp_far, 1, GL_FALSE, glm::value_ptr(mvp));
     glUniform3fv(gpu.eye_far, 1, glm::value_ptr(eye));
+    glUniform1i(gpu.width_far, w);
 
     for (int i = midpoint; i < volume; ++i)
     {
@@ -225,6 +234,7 @@ void World::draw(glm::mat4 mvp, glm::vec3 eye)
 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, gpu.ssbo_tree[j]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, gpu.ssbo_twig[j]);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssbo_color);
 
         glDrawElements(GL_TRIANGLES, sizeof(CUBE_INDICES) / sizeof(unsigned short), GL_UNSIGNED_SHORT, (void *)0);
     }
