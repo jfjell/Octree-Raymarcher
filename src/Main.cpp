@@ -126,7 +126,7 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
         int culled = 0;
-        world.draw(mvp, position, bark_ssbo);
+        world.draw(mvp, position);
 
         glDisable(GL_CULL_FACE);
         glDisable(GL_STENCIL_TEST);

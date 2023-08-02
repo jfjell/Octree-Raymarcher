@@ -37,6 +37,7 @@ struct Leaf
     uint offset;
 };
 
+uniform sampler2D atlas;
 uniform vec3 chunkmin, chunkmax;
 uniform float chunksize;
 uniform int csw, csh, csd;
@@ -45,11 +46,6 @@ uniform vec3 eye;
 layout(std430, binding = 2) restrict readonly buffer CHUNK_SSBO
 {
     Root Chunk[];
-};
-
-layout(std430, binding = 3) restrict readonly buffer BARK_SSBO
-{
-    vec4 Bark[];
 };
 
 layout(std430, binding = 4) restrict readonly buffer TREE_SSBO_ALPHA 
@@ -130,15 +126,27 @@ float cubeEnterDistance(vec3 a, vec3 g, vec3 cmin, vec3 cmax, out bool intersect
     return tnear;
 }
 
-vec3 cubeNormal(vec3 p, vec3 cmin, vec3 cmax)
+vec3 cubeNormal(vec3 s, vec3 cmin, vec3 cmax)
 {
-    if (abs(p.x - cmin.x) <= EPS) return vec3(-1, 0, 0);
-    if (abs(p.x - cmax.x) <= EPS) return vec3(+1, 0, 0);
-    if (abs(p.y - cmin.y) <= EPS) return vec3(0, -1, 0);
-    if (abs(p.y - cmax.y) <= EPS) return vec3(0, +1, 0);
-    if (abs(p.z - cmin.z) <= EPS) return vec3(0, 0, -1);
-    if (abs(p.z - cmax.z) <= EPS) return vec3(0, 0, +1);
-    return vec3(0, 0, 0);
+    vec3 c = (cmin + cmax) * 0.5;
+    vec3 p = s - c;
+    vec3 d = abs(cmin - cmax) * 0.5;
+    vec3 n = p / d;
+    float b = 1.0 + EPS;
+    return normalize(vec3(ivec3(n * b)));
+}
+
+vec2 cubeUV(vec3 p, vec3 cmin, vec3 cmax)
+{
+    float size = cmax.x - cmin.x;
+    vec2 uv = vec2(0);
+    if (abs(p.x - cmin.x) <= EPS) uv = p.yz - cmin.yz;
+    if (abs(p.x - cmax.x) <= EPS) uv = p.yz - cmax.yz;
+    if (abs(p.y - cmin.y) <= EPS) uv = p.xz - cmin.xz;
+    if (abs(p.y - cmax.y) <= EPS) uv = p.xz - cmax.xz;
+    if (abs(p.z - cmin.z) <= EPS) uv = p.xy - cmin.xy;
+    if (abs(p.z - cmax.z) <= EPS) uv = p.xy - cmax.xy;
+    return abs(uv) / size;
 }
 
 int mod_s(int n, int m)
@@ -337,9 +345,20 @@ void main()
     int steps = 0;
     if (rootmarch(alpha, beta, gamma, sigma, hitleaf, steps))
     {
+        vec3 leafmin = hitleaf.bmin;
+        vec3 leafmax = leafmin + hitleaf.size;
+
         vec3 point = alpha + beta * (sigma - EPS);
-        vec3 normal = cubeNormal(point, hitleaf.bmin, hitleaf.bmin + hitleaf.size);
-        vec3 color = 0.9 * vec3(0.5, 1, 0.2) + 0.1 * normal;
+        vec3 normal = cubeNormal(point, leafmin, leafmax);
+
+        uint b = hitleaf.offset;
+        vec2 t_uv = cubeUV(point, leafmin, leafmax);
+        t_uv += (vec2(lessThan(t_uv, vec2(0.125))) - vec2(greaterThan(t_uv, vec2(0.125)))) * EPS * 2;
+        uint x = b & 0xff;
+        uint y = (b >> 8) & 0xff;
+        vec2 a_uv = (vec2(x, y) + t_uv) / 256.0;
+
+        vec3 color = 0.9 * texture(atlas, a_uv).xyz + 0.1 * normal;
 
         Color = vec4(color, 1);
 

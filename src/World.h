@@ -6,6 +6,7 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 #include "Allocator.h"
+#include "Atlas.h"
 
 struct Ocroot;
 struct Ocdelta;
@@ -32,8 +33,9 @@ struct World
     BoundsPyramid *heightmap;
     int width, height, depth, plane, volume, chunksize;
     glm::ivec3 chunkcoordmin;
+    TextureAtlas atlas;
     unsigned int vao, vbo, ebo, shader, chunk_ssbo;
-    int chunkmin_ul, chunkmax_ul, chunksize_ul, w_ul, h_ul, d_ul, eye_ul, model_ul, mvp_ul;
+    int chunkmin_ul, chunkmax_ul, chunksize_ul, w_ul, h_ul, d_ul, eye_ul, model_ul, mvp_ul, sampler_ul;
 
     glm::ivec3 index_float(glm::vec3 p) const;
     int index(int x, int y, int z) const;
@@ -41,7 +43,7 @@ struct World
     void init(int w, int h, int d, int s);
     void deinit();
     void load_gpu();
-    void draw(glm::mat4 mvp, glm::vec3 eye, unsigned int bark_ssbo);
+    void draw(glm::mat4 mvp, glm::vec3 eye);
     void modify(int i, const Ocdelta *tree, const Ocdelta *twig);
     void g_pyramid(int x, int z);
     void g_chunk(int x, int y, int z);

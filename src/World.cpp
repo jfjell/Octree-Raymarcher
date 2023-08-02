@@ -56,6 +56,8 @@ extern const unsigned short CUBE_INDICES[6*6];
 
 void World::load_gpu()
 {
+    atlas.init();
+
     allocator.init(volume);
     for (int i = 0; i < volume; ++i)
         gcd[i] = GPUChunk(&chunk[i], allocator.alloc(i, &chunk[i]));
@@ -96,6 +98,7 @@ void World::load_gpu()
     eye_ul = glGetUniformLocation(shader, "eye");
     model_ul = glGetUniformLocation(shader, "model");
     mvp_ul = glGetUniformLocation(shader, "mvp");
+    sampler_ul = glGetUniformLocation(shader, "atlas");
 
     assert(chunkmin_ul != -1);
     assert(chunkmax_ul != -1);
@@ -141,7 +144,7 @@ static mat4 srt(vec3 chunkmin, vec3 bounds)
     return srt;
 }
 
-void World::draw(mat4 mvp, vec3 eye, unsigned int bark_ssbo)
+void World::draw(mat4 mvp, vec3 eye)
 {
     vec3 bounds = vec3(width, height, depth);
     vec3 chunkmin = chunkcoordmin * chunksize;
@@ -167,13 +170,17 @@ void World::draw(mat4 mvp, vec3 eye, unsigned int bark_ssbo)
     glUniform3fv(eye_ul, 1, glm::value_ptr(eye));
     glUniformMatrix4fv(model_ul, 1, GL_FALSE, glm::value_ptr(model));
     glUniformMatrix4fv(mvp_ul, 1, GL_FALSE, glm::value_ptr(mvp));
+    glUniform1i(sampler_ul, 0);
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, chunk_ssbo);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, bark_ssbo);
     allocator.bind();
+
+    glBindTexture(GL_TEXTURE_2D, atlas.tex);
+    glActiveTexture(GL_TEXTURE0);
 
     glDrawElements(GL_TRIANGLES, sizeof(CUBE_INDICES) / sizeof(unsigned short), GL_UNSIGNED_SHORT, (void *)0);
 
+    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
     glBindVertexArray(0);
     glUseProgram(0);
 }
