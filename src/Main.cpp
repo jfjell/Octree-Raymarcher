@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <vector>
 #include <algorithm>
-#include <windows.h>
 #include <GL/glew.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
@@ -26,6 +25,9 @@
 #include "Shader.h"
 #include "World.h"
 #include "Worm.h"
+
+#define FAR 8192.f
+#define NEAR 0.125f
 
 SDL_Window *window;
 SDL_GLContext glContext;
@@ -129,8 +131,8 @@ int main()
         glDisable(GL_CULL_FACE);
         glDisable(GL_STENCIL_TEST);
         glEnable(GL_DEPTH_TEST);
-        glEnable(GL_BLEND);
         glDepthFunc(GL_LESS);
+        glEnable(GL_BLEND);
         computeTarget(&world);
         if (imag.real) 
             imag.draw(mvp);
@@ -246,7 +248,7 @@ void computeMVP()
     const mat4 R = I;
     const mat4 SRT = T * S * R;
     const mat4 M = SRT;
-    const mat4 P = glm::perspective(glm::radians(fov/2), (float)width / height, .1f, 10000.f);
+    const mat4 P = glm::perspective(glm::radians(fov/2), (float)width / height, NEAR, FAR);
     const mat4 V = glm::lookAt(position, position + direction, up);
     const mat4 MVP = P * V * M;
 

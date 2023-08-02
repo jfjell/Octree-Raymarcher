@@ -141,17 +141,12 @@ static mat4 srt(vec3 chunkmin, vec3 bounds)
     return srt;
 }
 
-#include <iostream>
-#include <glm/gtx/io.hpp>
-
 void World::draw(mat4 mvp, vec3 eye, unsigned int bark_ssbo)
 {
     vec3 bounds = vec3(width, height, depth);
     vec3 chunkmin = chunkcoordmin * chunksize;
     vec3 chunkmax = chunkmin + bounds * (float)chunksize;
     mat4 model = srt(chunkmin, bounds * (float)chunksize);
-
-    using namespace std;
 
     glDisable(GL_STENCIL_TEST);
     glDisable(GL_CULL_FACE);
