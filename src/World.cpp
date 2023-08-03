@@ -175,8 +175,8 @@ void World::draw(mat4 mvp, vec3 eye)
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, chunk_ssbo);
     allocator.bind();
 
-    glBindTexture(GL_TEXTURE_2D, atlas.tex);
     glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, atlas.tex);
 
     glDrawElements(GL_TRIANGLES, sizeof(CUBE_INDICES) / sizeof(unsigned short), GL_UNSIGNED_SHORT, (void *)0);
 

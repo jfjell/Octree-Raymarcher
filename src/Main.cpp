@@ -25,6 +25,7 @@
 #include "Shader.h"
 #include "World.h"
 #include "Worm.h"
+#include "Skybox.h"
 
 #define FAR 8192.f
 #define NEAR 0.125f
@@ -48,10 +49,11 @@ GBuffer gbuffer;
 Counter sw;
 bool cursor = false;
 
+using glm::mat4;
 using glm::vec3;
 
 void computeTarget(const World *world);
-void computeMVP();
+void computeMVP(mat4 *p, mat4 *v);
 void initialize();
 void deinitialize();
 void initializeControls();
@@ -76,21 +78,25 @@ int main()
     gbuffer.init(width, height);
 
     gbuffer.enable();
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
+    // glEnable(GL_DEPTH_TEST);
+    // glDepthFunc(GL_LESS);
 
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
+    // glEnable(GL_BLEND);
+    // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
 
+    /*
     glEnable(GL_STENCIL_TEST);
     glStencilMask(0xff);
     glClearStencil(0);
     glStencilFunc(GL_NOTEQUAL, 1, 0xff);
     glStencilOp(GL_KEEP, GL_INCR, GL_INCR);
+    */
 
+    /*
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW); 
+    */
 
     int sbits = 0;
     glGetIntegerv(GL_STENCIL_BITS, &sbits);
@@ -104,6 +110,9 @@ int main()
 
     Worm worm;
     worm.init();
+
+    Skybox skybox;
+    skybox.init();
 
     Counter frame, textframe;
     textframe.start();
@@ -119,18 +128,25 @@ int main()
     {
         input.poll();
 
-        computeMVP();
+        mat4 p, v;
+        computeMVP(&p, &v);
 
         glClearColor(0.f, 0.f, 0.f, 1.f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         gbuffer.enable();
 
-        glClearColor(0.2f, .1f, .4f, 1.f);
+        glClearColor(0.f, 0.f, 0.f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
+
         int culled = 0;
+
         world.draw(mvp, position);
+
+        skybox.draw(v, p);
+
+        glDisable(GL_STENCIL_TEST);
 
         glDisable(GL_CULL_FACE);
         glDisable(GL_STENCIL_TEST);
@@ -167,6 +183,7 @@ int main()
         frame.restart();
     }
 
+    skybox.release();
     world.deinit();
     gbuffer.deinit();
     imag.deinit();
@@ -232,7 +249,9 @@ void replace()
     modify(&imag, &world, dr);
 }
 
-void computeMVP()
+using glm::mat4;
+
+void computeMVP(mat4 *p, mat4 *v)
 {
     using glm::mat4;
     using glm::vec3;
@@ -255,6 +274,9 @@ void computeMVP()
     const mat4 P = glm::perspective(glm::radians(fov/2), (float)width / height, NEAR, FAR);
     const mat4 V = glm::lookAt(position, position + direction, up);
     const mat4 MVP = P * V * M;
+
+    *p = P;
+    *v = V;
 
     mvp = MVP;
 }
@@ -301,27 +323,6 @@ void initialize()
 
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(glCallback, NULL);
-
-    /*
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
-
-    glEnable(GL_STENCIL_TEST);
-    glStencilMask(0xff);
-    glClearStencil(0);
-    glStencilFunc(GL_NOTEQUAL, 1, 0xff);
-    glStencilOp(GL_KEEP, GL_REPLACE, GL_REPLACE);
-
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
-    glFrontFace(GL_CCW); 
-
-    int sbits = 0;
-    glGetIntegerv(GL_STENCIL_BITS, &sbits);
-    */
 }
 
 void deinitialize()
