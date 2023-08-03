@@ -96,6 +96,10 @@ int main()
     glGetIntegerv(GL_STENCIL_BITS, &sbits);
     // assert(sbits > 0);
 
+    int mts = 0;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mts);
+    printf("GL_MAX_TEXTURE_SIZE=%d\n", mts);
+
     gbuffer.disable();
 
     Worm worm;

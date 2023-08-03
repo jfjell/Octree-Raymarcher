@@ -6,7 +6,7 @@ def bits_of_nodes(levels, children_per_node):
     return int(children * 8 * 4 * 8)
 
 def bits_of_bricks(levels):
-    return int(8**levels * 2 * 8)
+    return int(8**levels * 12)
 
 CHILDREN = 4
 COLUMNS = '{: >16}' * 5

@@ -75,7 +75,7 @@ uint Tree_type(uint t)
 
 uint Twig_shift(uint t)
 {
-    return t % 2 ? 16 : 0;
+    return (t % 2 != 0) ? 16 : 0;
 }
 
 uint Tree_offset(uint t)
@@ -219,7 +219,7 @@ bool twigmarch(uint i, uint ignore,
         vec3 leafmax = leafmin + leafsize;
 
         uint word = Twig_dword(offset.x, offset.y, offset.z);
-        uint shift = Twig_shift(word);
+        uint shift = Twig_shift(offset.x);
         uint mask = 0xffff;
 
         uint bark = (Twig(reg, off + i + word) >> shift) & mask;
