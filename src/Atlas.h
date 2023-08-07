@@ -5,7 +5,7 @@
 
 struct TextureAtlas
 {
-    unsigned int tex;
+    unsigned int diffuse, specular;
 
     void init();
     void release();

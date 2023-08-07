@@ -98,7 +98,9 @@ void World::load_gpu()
     eye_ul = glGetUniformLocation(shader, "eye");
     model_ul = glGetUniformLocation(shader, "model");
     mvp_ul = glGetUniformLocation(shader, "mvp");
-    sampler_ul = glGetUniformLocation(shader, "atlas");
+
+    diffuse_ul = glGetUniformLocation(shader, "Diffuse");
+    specular_ul = glGetUniformLocation(shader, "Specular");
 
     assert(chunkmin_ul != -1);
     assert(chunkmax_ul != -1);
@@ -170,17 +172,23 @@ void World::draw(mat4 mvp, vec3 eye)
     glUniform3fv(eye_ul, 1, glm::value_ptr(eye));
     glUniformMatrix4fv(model_ul, 1, GL_FALSE, glm::value_ptr(model));
     glUniformMatrix4fv(mvp_ul, 1, GL_FALSE, glm::value_ptr(mvp));
-    glUniform1i(sampler_ul, 0);
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, chunk_ssbo);
     allocator.bind();
 
+    glUniform1i(diffuse_ul, 0);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, atlas.tex);
+    glBindTexture(GL_TEXTURE_2D, atlas.diffuse);
+    glUniform1i(specular_ul, 1);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, atlas.specular);
 
     glDrawElements(GL_TRIANGLES, sizeof(CUBE_INDICES) / sizeof(unsigned short), GL_UNSIGNED_SHORT, (void *)0);
 
-    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, 0);
     glBindVertexArray(0);
     glUseProgram(0);
 }

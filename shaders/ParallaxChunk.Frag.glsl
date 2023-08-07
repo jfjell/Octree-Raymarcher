@@ -37,7 +37,8 @@ struct Leaf
     uint offset;
 };
 
-uniform sampler2D atlas;
+uniform sampler2D Diffuse, Specular;
+
 uniform vec3 chunkmin, chunkmax;
 uniform float chunksize;
 uniform int csw, csh, csd;
@@ -330,6 +331,133 @@ bool rootmarch(vec3 a, vec3 b, vec3 g, out float s, out Leaf hitleaf, inout int 
     return false;
 }
 
+vec2 leafUV(vec3 p, Leaf leaf)
+{
+    vec3 leafmin = leaf.bmin;
+    vec3 leafmax = leafmin + leaf.size;
+    uint m = leaf.offset;
+    vec2 iuv = cubeUV(p, leafmin, leafmax);
+    iuv += (vec2(lessThan(iuv, vec2(0.125))) - vec2(greaterThan(iuv, vec2(0.125)))) * EPS * 2;
+    uint x = m & 0xff, y = (m >> 8) & 0xff;
+    vec2 uv = (vec2(x, y) + iuv) / 256.0;
+    return uv;
+}
+
+struct PointLight
+{
+    vec3 position;
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    float constant;
+    float linear;
+    float quadratic;
+};
+
+struct DirectionalLight
+{
+    vec3 direction;
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+};
+
+struct Spotlight
+{
+    vec3 position;
+    vec3 direction;
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    float cos_phi;
+    float cos_gamma;
+    float constant;
+    float linear;
+    float quadratic;
+};
+
+uniform PointLight pointLight;
+uniform DirectionalLight directionalLight;
+uniform Spotlight spotlight;
+
+struct Material
+{
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    float shininess;
+};
+
+Material ML[8] =
+{
+    Material(vec3(0), vec3(0), vec3(0), 0), // void
+    Material(vec3(0.8), vec3(0.8), vec3(0.5), 8), // stone
+    Material(vec3(0.8), vec3(0.6), vec3(0.1), 16), // dirt
+    Material(vec3(0.8), vec3(0.7), vec3(0.15), 32), // sand
+    Material(vec3(0.8), vec3(0.9), vec3(0.7), 64), // grass
+    Material(vec3(0.8), vec3(0.5), vec3(0), 0), // shroom
+    Material(vec3(0.8), vec3(0.4), vec3(0.9), 128), // water
+    Material(vec3(0), vec3(0), vec3(0), 0), // void
+};
+
+float attenuation(float Kc, float Kl, float Kq, float d)
+{
+    return 1.0 / (Kc + Kl * d + Kq * d * d);
+}
+
+vec3 computePointLight_Phong(PointLight light, vec3 normal, vec3 point, vec3 view, vec3 diffuse, vec3 specular, float shininess)
+{
+    vec3 l = normalize(point - light.position);
+    vec3 r = reflect(l, normal);
+
+    float d = max(dot(normal, -l), 0.0);
+    float s = pow(max(dot(view, r), 0.0), shininess);
+
+    float dist = length(point - light.position);
+    float att = attenuation(light.constant, light.linear, light.quadratic, dist);
+
+    vec3 amb = light.ambient * diffuse;
+    vec3 diff = light.diffuse * d * diffuse;
+    vec3 spec = light.specular * s * specular;
+    return (amb + diff + spec) * att;
+}
+
+vec3 computeDirectionalLight_Phong(DirectionalLight light, vec3 normal, vec3 view, vec3 diffuse, vec3 specular, float shininess)
+{
+    vec3 r = reflect(light.direction, normal);
+
+    float d = max(dot(normal, -light.direction), 0.0);
+    float s = pow(max(dot(view, r), 0.0), shininess);
+
+    vec3 amb = light.ambient * diffuse;
+    vec3 diff = light.diffuse * d * diffuse;
+    vec3 spec = light.specular * s * specular;
+
+    return amb + diff + spec;
+}
+
+vec3 computeSpotlight_Phong(Spotlight light, vec3 normal, vec3 point, vec3 view, vec3 diffuse, vec3 specular, float shininess)
+{
+    vec3 l = normalize(point - light.position);
+    vec3 r = reflect(light.direction, normal);
+
+    float d = max(dot(normal, -light.direction), 0.0);
+    float s = pow(max(dot(view, r), 0.0), shininess);
+
+    float dist = length(point - light.position);
+    float att = attenuation(light.constant, light.linear, light.quadratic, dist);
+
+    float theta = dot(-l, normalize(-light.direction));
+    float delta = spotlight.cos_phi - spotlight.cos_gamma;
+    float intensity = clamp((theta - spotlight.cos_gamma) / delta, 0.0, 1.0);
+
+    vec3 amb = light.ambient * diffuse;
+    vec3 diff = light.diffuse * d * diffuse;
+    vec3 spec = light.specular * s * specular;
+
+    return (amb + (diff + spec) * intensity) * att;
+}
+
 in vec3 hit;
 
 out vec4 Color;
@@ -352,15 +480,71 @@ void main()
         vec3 normal = cubeNormal(point, leafmin, leafmax);
 
         uint b = hitleaf.offset;
-        vec2 t_uv = cubeUV(point, leafmin, leafmax);
-        t_uv += (vec2(lessThan(t_uv, vec2(0.125))) - vec2(greaterThan(t_uv, vec2(0.125)))) * EPS * 2;
-        uint x = b & 0xff;
-        uint y = (b >> 8) & 0xff;
-        vec2 a_uv = (vec2(x, y) + t_uv) / 256.0;
+        vec2 uv = leafUV(point, hitleaf);
 
-        vec3 color = 0.9 * texture(atlas, a_uv).xyz + 0.1 * normal;
+        vec3 diffuse = texture(Diffuse, uv).xyz;
+        vec3 specular = texture(Specular, uv).xyz;
 
-        Color = vec4(color, 1);
+        // --------------------------------------------------------------------------------------------------------------------
+        Material material = ML[b];
+
+        /*
+        vec3 directionp = normalize(pointLight.position - point);
+        vec3 reflectionp = reflect(-directionp, normal);
+        float dp = max(dot(normal, directionp), 0);
+        float sp = pow(max(dot(beta, reflectionp), 0), material.shininess);
+
+        vec3 ambientFp = pointLight.ambient * diffuse;
+        vec3 diffuseFp = pointLight.diffuse * (dp * diffuse);
+        vec3 specularFp = pointLight.specular * (sp * specular);
+
+        float dist_pl = length(pointLight.position - point);
+        float att = 1.0 / (pointLight.constant + pointLight.linear * dist_pl + pointLight.quadratic * (dist_pl * dist_pl));
+        ambientFp *= att;
+        diffuseFp *= att;
+        specularFp *= att;
+
+        vec3 directiond = normalize(-directionalLight.direction);
+        vec3 reflectiond = reflect(-directiond, normal);
+        float dd = max(dot(normal, directiond), 0);
+        float sd = pow(max(dot(beta, reflectiond), 0), material.shininess);
+
+        vec3 ambientFd = directionalLight.ambient * diffuse;
+        vec3 diffuseFd = directionalLight.diffuse * (dd * diffuse);
+        vec3 specularFd = directionalLight.specular * (sd * specular);
+
+        vec3 ldS = normalize(spotlight.position - point);
+        float distS = length(point - spotlight.position);
+        vec3 dS = normalize(-spotlight.direction);
+        vec3 ambientS, diffuseS, specularS;
+        float attS = 1.0 / (spotlight.constant + spotlight.linear * distS + spotlight.quadratic * (distS * distS));
+        float theta = dot(ldS, normalize(-spotlight.direction));
+        float epsilon = spotlight.cos_phi - spotlight.cos_gamma;
+        float intensity = clamp((theta - spotlight.cos_gamma) / epsilon, 0, 1);
+        vec3 rS = reflect(-dS, normal);
+        float diffS = max(dot(normal, dS), 0);
+        float specS = pow(max(dot(beta, rS), 0), material.shininess);
+
+        ambientS = spotlight.ambient * diffuse;
+        diffuseS = spotlight.diffuse * (diffS * diffuse) * intensity;
+        specularS = spotlight.specular * (specS * specular) * intensity;
+        ambientS *= attS;
+        diffuseS *= attS;
+        specularS *= attS;
+        */
+
+        // --------------------------------------------------------------------------------------------------------------------
+
+        Color.rgb = vec3(0);
+        /*
+        Color.rgb += (ambientFp + diffuseFp + specularFp);
+        Color.rgb += (ambientFd + diffuseFd + specularFd);
+        Color.rgb += (ambientS + diffuseS + specularS);
+        */
+        Color.rgb += computeDirectionalLight_Phong(directionalLight, normal, beta, diffuse, specular, material.shininess);
+        Color.rgb += computePointLight_Phong(pointLight, normal, point, beta, diffuse, specular, material.shininess);
+        Color.rgb += computeSpotlight_Phong(spotlight, normal, point, beta, diffuse, specular, material.shininess);
+        Color.a = 1;
 
         float inv_z = 1.0 / distance(point, eye);
         float inv_near = 1.0 / NEAR;

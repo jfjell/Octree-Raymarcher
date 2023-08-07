@@ -6,14 +6,12 @@
 #include "Atlas.h"
 #include "Util.h"
 
-void TextureAtlas::init()
+static unsigned int load(const char *path)
 {
-    const char *path = "textures/atlas.png";
     SDL_Surface *ts = IMG_Load(path);
     if (!ts) die("IMG_Load(\"%s\"): %s\n", path, IMG_GetError());
-    assert(ts->w == 2048);
-    assert(ts->h == 2048);
 
+    unsigned int tex = 0;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -24,9 +22,18 @@ void TextureAtlas::init()
 
     SDL_FreeSurface(ts);
     glBindTexture(GL_TEXTURE_2D, 0);
+
+    return tex;
+}
+
+void TextureAtlas::init()
+{
+    diffuse = load("textures/diffuse.png");
+    specular = load("textures/diffuse.png");
 }
 
 void TextureAtlas::release()
 {
-    glDeleteTextures(1, &tex);
+    glDeleteTextures(1, &diffuse);
+    glDeleteTextures(1, &specular);
 }

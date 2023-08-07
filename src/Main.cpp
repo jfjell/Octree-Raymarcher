@@ -26,6 +26,7 @@
 #include "World.h"
 #include "Worm.h"
 #include "Skybox.h"
+#include "Light.h"
 
 #define FAR 8192.f
 #define NEAR 0.125f
@@ -124,6 +125,37 @@ int main()
     glBufferData(GL_SHADER_STORAGE_BUFFER, 4, NULL, GL_STATIC_DRAW); 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
+    PointLight pointLight;
+    pointLight.position = vec3(50, 8, 65);
+    pointLight.color = vec3(0.8, 0.6, 0.2);
+    pointLight.ambient = vec3(0.2);
+    pointLight.diffuse = vec3(0.5);
+    pointLight.specular = vec3(1);
+    pointLight.constant = 1.0;
+    pointLight.linear = 0.14;
+    pointLight.quadratic = 0.09;
+
+    PointLightContext pointLightContext;
+    pointLightContext.init();
+
+    DirectionalLight directionalLight;
+    directionalLight.direction = glm::normalize(vec3(-0.2, -1.0, -0.3));
+    directionalLight.ambient = vec3(0.2, 0.1, 0.8);
+    directionalLight.diffuse = vec3(0.2, 0.1, 0.8);
+    directionalLight.specular = vec3(1);
+
+    Spotlight spotlight;
+    spotlight.position = vec3(50, 20, 70);
+    spotlight.direction = glm::normalize(vec3(0.1, -1.0, -0.1));
+    spotlight.ambient = vec3(0.2, 0.8, 0.3);
+    spotlight.diffuse = vec3(0.2, 0.8, 0.3);
+    spotlight.specular = vec3(1);
+    spotlight.phi_deg = 25.0;
+    spotlight.gamma_deg = 35.0;
+    spotlight.constant = 1.0;
+    spotlight.linear = 0.045;
+    spotlight.quadratic = 0.0075;
+
     while (running) 
     {
         input.poll();
@@ -139,10 +171,21 @@ int main()
         glClearColor(0.f, 0.f, 0.f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-
         int culled = 0;
 
+        float t = (double)clock() / CLOCKS_PER_SEC;
+        pointLight.position.x = 50.0 + cos(t) * 10.f;
+        pointLight.position.z = 65.0 + sin(t) * 10.f;
+
+        glUseProgram(world.shader);
+
+        pointLight.bind(world.shader, "pointLight");
+        directionalLight.bind(world.shader, "directionalLight");
+        spotlight.bind(world.shader, "spotlight");
+
         world.draw(mvp, position);
+        pointLightContext.draw(mvp, pointLight.position, pointLight.color);
+        pointLightContext.draw(mvp, spotlight.position, spotlight.diffuse);
 
         skybox.draw(v, p);
 
@@ -183,6 +226,7 @@ int main()
         frame.restart();
     }
 
+    pointLightContext.release();
     skybox.release();
     world.deinit();
     gbuffer.deinit();
