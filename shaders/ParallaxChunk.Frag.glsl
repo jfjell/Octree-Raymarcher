@@ -405,15 +405,16 @@ float attenuation(float Kc, float Kl, float Kq, float d)
     return 1.0 / (Kc + Kl * d + Kq * d * d);
 }
 
-vec3 computePointLight_Phong(PointLight light, vec3 normal, vec3 point, vec3 view, vec3 diffuse, vec3 specular, float shininess)
+vec3 computePointLight_Phong(PointLight light, vec3 n, vec3 p, vec3 e, vec3 diffuse, vec3 specular, float shininess)
 {
-    vec3 l = normalize(point - light.position);
-    vec3 r = reflect(l, normal);
+    vec3 l = normalize(light.position - p);
+    vec3 r = reflect(-l, n);
+    vec3 v = normalize(e - p);
 
-    float d = max(dot(normal, -l), 0.0);
-    float s = pow(max(dot(view, r), 0.0), shininess);
+    float d = max(dot(n, l), 0.0);
+    float s = pow(max(dot(v, r), 0.0), shininess);
 
-    float dist = length(point - light.position);
+    float dist = length(p - light.position);
     float att = attenuation(light.constant, light.linear, light.quadratic, dist);
 
     vec3 amb = light.ambient * diffuse;
@@ -422,12 +423,14 @@ vec3 computePointLight_Phong(PointLight light, vec3 normal, vec3 point, vec3 vie
     return (amb + diff + spec) * att;
 }
 
-vec3 computeDirectionalLight_Phong(DirectionalLight light, vec3 normal, vec3 view, vec3 diffuse, vec3 specular, float shininess)
+vec3 computeDirectionalLight_Phong(DirectionalLight light, vec3 n, vec3 p, vec3 e, vec3 diffuse, vec3 specular, float shininess)
 {
-    vec3 r = reflect(light.direction, normal);
+    vec3 l = normalize(-light.direction);
+    vec3 r = reflect(-l, n);
+    vec3 v = normalize(e - p);
 
-    float d = max(dot(normal, -light.direction), 0.0);
-    float s = pow(max(dot(view, r), 0.0), shininess);
+    float d = max(dot(n, l), 0.0);
+    float s = pow(max(dot(v, r), 0.0), shininess);
 
     vec3 amb = light.ambient * diffuse;
     vec3 diff = light.diffuse * d * diffuse;
@@ -436,18 +439,19 @@ vec3 computeDirectionalLight_Phong(DirectionalLight light, vec3 normal, vec3 vie
     return amb + diff + spec;
 }
 
-vec3 computeSpotlight_Phong(Spotlight light, vec3 normal, vec3 point, vec3 view, vec3 diffuse, vec3 specular, float shininess)
+vec3 computeSpotlight_Phong(Spotlight light, vec3 n, vec3 p, vec3 e, vec3 diffuse, vec3 specular, float shininess)
 {
-    vec3 l = normalize(point - light.position);
-    vec3 r = reflect(light.direction, normal);
+    vec3 l = normalize(light.position - p);
+    vec3 r = reflect(-l, n);
+    vec3 v = normalize(e - p);
 
-    float d = max(dot(normal, -light.direction), 0.0);
-    float s = pow(max(dot(view, r), 0.0), shininess);
+    float d = max(dot(n, l), 0.0);
+    float s = pow(max(dot(v, r), 0.0), shininess);
 
-    float dist = length(point - light.position);
+    float dist = length(p - light.position);
     float att = attenuation(light.constant, light.linear, light.quadratic, dist);
 
-    float theta = dot(-l, normalize(-light.direction));
+    float theta = dot(l, normalize(-light.direction));
     float delta = spotlight.cos_phi - spotlight.cos_gamma;
     float intensity = clamp((theta - spotlight.cos_gamma) / delta, 0.0, 1.0);
 
@@ -485,65 +489,12 @@ void main()
         vec3 diffuse = texture(Diffuse, uv).xyz;
         vec3 specular = texture(Specular, uv).xyz;
 
-        // --------------------------------------------------------------------------------------------------------------------
         Material material = ML[b];
 
-        /*
-        vec3 directionp = normalize(pointLight.position - point);
-        vec3 reflectionp = reflect(-directionp, normal);
-        float dp = max(dot(normal, directionp), 0);
-        float sp = pow(max(dot(beta, reflectionp), 0), material.shininess);
-
-        vec3 ambientFp = pointLight.ambient * diffuse;
-        vec3 diffuseFp = pointLight.diffuse * (dp * diffuse);
-        vec3 specularFp = pointLight.specular * (sp * specular);
-
-        float dist_pl = length(pointLight.position - point);
-        float att = 1.0 / (pointLight.constant + pointLight.linear * dist_pl + pointLight.quadratic * (dist_pl * dist_pl));
-        ambientFp *= att;
-        diffuseFp *= att;
-        specularFp *= att;
-
-        vec3 directiond = normalize(-directionalLight.direction);
-        vec3 reflectiond = reflect(-directiond, normal);
-        float dd = max(dot(normal, directiond), 0);
-        float sd = pow(max(dot(beta, reflectiond), 0), material.shininess);
-
-        vec3 ambientFd = directionalLight.ambient * diffuse;
-        vec3 diffuseFd = directionalLight.diffuse * (dd * diffuse);
-        vec3 specularFd = directionalLight.specular * (sd * specular);
-
-        vec3 ldS = normalize(spotlight.position - point);
-        float distS = length(point - spotlight.position);
-        vec3 dS = normalize(-spotlight.direction);
-        vec3 ambientS, diffuseS, specularS;
-        float attS = 1.0 / (spotlight.constant + spotlight.linear * distS + spotlight.quadratic * (distS * distS));
-        float theta = dot(ldS, normalize(-spotlight.direction));
-        float epsilon = spotlight.cos_phi - spotlight.cos_gamma;
-        float intensity = clamp((theta - spotlight.cos_gamma) / epsilon, 0, 1);
-        vec3 rS = reflect(-dS, normal);
-        float diffS = max(dot(normal, dS), 0);
-        float specS = pow(max(dot(beta, rS), 0), material.shininess);
-
-        ambientS = spotlight.ambient * diffuse;
-        diffuseS = spotlight.diffuse * (diffS * diffuse) * intensity;
-        specularS = spotlight.specular * (specS * specular) * intensity;
-        ambientS *= attS;
-        diffuseS *= attS;
-        specularS *= attS;
-        */
-
-        // --------------------------------------------------------------------------------------------------------------------
-
         Color.rgb = vec3(0);
-        /*
-        Color.rgb += (ambientFp + diffuseFp + specularFp);
-        Color.rgb += (ambientFd + diffuseFd + specularFd);
-        Color.rgb += (ambientS + diffuseS + specularS);
-        */
-        Color.rgb += computeDirectionalLight_Phong(directionalLight, normal, beta, diffuse, specular, material.shininess);
-        Color.rgb += computePointLight_Phong(pointLight, normal, point, beta, diffuse, specular, material.shininess);
-        Color.rgb += computeSpotlight_Phong(spotlight, normal, point, beta, diffuse, specular, material.shininess);
+        Color.rgb += computePointLight_Phong(pointLight, normal, point, eye, diffuse, specular, material.shininess);
+        Color.rgb += computeDirectionalLight_Phong(directionalLight, normal, point, eye, diffuse, specular, material.shininess);
+        Color.rgb += computeSpotlight_Phong(spotlight, normal, point, eye, diffuse, specular, material.shininess);
         Color.a = 1;
 
         float inv_z = 1.0 / distance(point, eye);

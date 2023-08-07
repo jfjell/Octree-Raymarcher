@@ -21,6 +21,7 @@ void PointLight::bind(unsigned int shader, const char *var)
     int linear_ul = glGetUniformLocation(shader, (varname + ".linear").c_str());
     int quadratic_ul = glGetUniformLocation(shader, (varname + ".quadratic").c_str());
 
+    /*
     assert(position_ul != -1);
     assert(ambient_ul != -1);
     assert(diffuse_ul != -1);
@@ -28,6 +29,7 @@ void PointLight::bind(unsigned int shader, const char *var)
     assert(constant_ul != -1);
     assert(linear_ul != -1);
     assert(quadratic_ul != -1);
+    */
 
     glUniform3fv(ambient_ul, 1, glm::value_ptr(ambient));
     glUniform3fv(position_ul, 1, glm::value_ptr(position));
@@ -47,10 +49,12 @@ void DirectionalLight::bind(unsigned int shader, const char *var)
     int diffuse_ul = glGetUniformLocation(shader, (varname + ".diffuse").c_str());
     int specular_ul = glGetUniformLocation(shader, (varname + ".specular").c_str());
 
+    /*
     assert(direction_ul != -1);
     assert(ambient_ul != -1);
     assert(diffuse_ul != -1);
     assert(specular_ul != -1);
+    */
 
     glUniform3fv(direction_ul, 1, glm::value_ptr(direction));
     glUniform3fv(ambient_ul, 1, glm::value_ptr(ambient));
@@ -73,6 +77,7 @@ void Spotlight::bind(unsigned int shader, const char *var)
     int linear_ul = glGetUniformLocation(shader, (varname + ".linear").c_str());
     int quadratic_ul = glGetUniformLocation(shader, (varname + ".quadratic").c_str());
 
+    /*
     assert(position_ul != -1);
     assert(direction_ul != -1);
     assert(ambient_ul != -1);
@@ -83,6 +88,7 @@ void Spotlight::bind(unsigned int shader, const char *var)
     assert(constant_ul != -1);
     assert(linear_ul != -1);
     assert(quadratic_ul != -1);
+    */
 
     glUniform3fv(position_ul, 1, glm::value_ptr(position));
     glUniform3fv(direction_ul, 1, glm::value_ptr(direction));

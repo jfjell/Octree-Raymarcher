@@ -140,8 +140,8 @@ int main()
 
     DirectionalLight directionalLight;
     directionalLight.direction = glm::normalize(vec3(-0.2, -1.0, -0.3));
-    directionalLight.ambient = vec3(0.2, 0.1, 0.8);
-    directionalLight.diffuse = vec3(0.2, 0.1, 0.8);
+    directionalLight.ambient = vec3(0.2, 0.2, 0.2);
+    directionalLight.diffuse = vec3(0.3, 0.3, 0.6);
     directionalLight.specular = vec3(1);
 
     Spotlight spotlight;
