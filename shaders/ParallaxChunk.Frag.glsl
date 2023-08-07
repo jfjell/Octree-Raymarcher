@@ -394,7 +394,7 @@ Material ML[8] =
     Material(vec3(0.8), vec3(0.8), vec3(0.5), 8), // stone
     Material(vec3(0.8), vec3(0.6), vec3(0.1), 16), // dirt
     Material(vec3(0.8), vec3(0.7), vec3(0.15), 32), // sand
-    Material(vec3(0.8), vec3(0.9), vec3(0.7), 64), // grass
+    Material(vec3(0.8), vec3(0.9), vec3(0.7), 10000), // grass
     Material(vec3(0.8), vec3(0.5), vec3(0), 0), // shroom
     Material(vec3(0.8), vec3(0.4), vec3(0.9), 128), // water
     Material(vec3(0), vec3(0), vec3(0), 0), // void
@@ -405,14 +405,15 @@ float attenuation(float Kc, float Kl, float Kq, float d)
     return 1.0 / (Kc + Kl * d + Kq * d * d);
 }
 
-vec3 computePointLight_Phong(PointLight light, vec3 n, vec3 p, vec3 e, vec3 diffuse, vec3 specular, float shininess)
+vec3 computePointLight_BlinnPhong(PointLight light, vec3 n, vec3 p, vec3 e, vec3 diffuse, vec3 specular, float shininess)
 {
     vec3 l = normalize(light.position - p);
-    vec3 r = reflect(-l, n);
     vec3 v = normalize(e - p);
+    // vec3 r = reflect(-l, n);
+    vec3 h = normalize(l + v);
 
     float d = max(dot(n, l), 0.0);
-    float s = pow(max(dot(v, r), 0.0), shininess);
+    float s = pow(max(dot(v, h), 0.0), shininess);
 
     float dist = length(p - light.position);
     float att = attenuation(light.constant, light.linear, light.quadratic, dist);
@@ -423,14 +424,15 @@ vec3 computePointLight_Phong(PointLight light, vec3 n, vec3 p, vec3 e, vec3 diff
     return (amb + diff + spec) * att;
 }
 
-vec3 computeDirectionalLight_Phong(DirectionalLight light, vec3 n, vec3 p, vec3 e, vec3 diffuse, vec3 specular, float shininess)
+vec3 computeDirectionalLight_BlinnPhong(DirectionalLight light, vec3 n, vec3 p, vec3 e, vec3 diffuse, vec3 specular, float shininess)
 {
     vec3 l = normalize(-light.direction);
-    vec3 r = reflect(-l, n);
     vec3 v = normalize(e - p);
+    // vec3 r = reflect(-l, n);
+    vec3 h = normalize(l + v);
 
     float d = max(dot(n, l), 0.0);
-    float s = pow(max(dot(v, r), 0.0), shininess);
+    float s = pow(max(dot(v, h), 0.0), shininess);
 
     vec3 amb = light.ambient * diffuse;
     vec3 diff = light.diffuse * d * diffuse;
@@ -439,14 +441,15 @@ vec3 computeDirectionalLight_Phong(DirectionalLight light, vec3 n, vec3 p, vec3 
     return amb + diff + spec;
 }
 
-vec3 computeSpotlight_Phong(Spotlight light, vec3 n, vec3 p, vec3 e, vec3 diffuse, vec3 specular, float shininess)
+vec3 computeSpotlight_BlinnPhong(Spotlight light, vec3 n, vec3 p, vec3 e, vec3 diffuse, vec3 specular, float shininess)
 {
     vec3 l = normalize(light.position - p);
-    vec3 r = reflect(-l, n);
     vec3 v = normalize(e - p);
+    // vec3 r = reflect(-l, n);
+    vec3 h = normalize(l + v);
 
     float d = max(dot(n, l), 0.0);
-    float s = pow(max(dot(v, r), 0.0), shininess);
+    float s = pow(max(dot(v, h), 0.0), shininess);
 
     float dist = length(p - light.position);
     float att = attenuation(light.constant, light.linear, light.quadratic, dist);
@@ -492,9 +495,9 @@ void main()
         Material material = ML[b];
 
         Color.rgb = vec3(0);
-        Color.rgb += computePointLight_Phong(pointLight, normal, point, eye, diffuse, specular, material.shininess);
-        Color.rgb += computeDirectionalLight_Phong(directionalLight, normal, point, eye, diffuse, specular, material.shininess);
-        Color.rgb += computeSpotlight_Phong(spotlight, normal, point, eye, diffuse, specular, material.shininess);
+        Color.rgb += computePointLight_BlinnPhong(pointLight, normal, point, eye, diffuse, specular, material.shininess);
+        Color.rgb += computeDirectionalLight_BlinnPhong(directionalLight, normal, point, eye, diffuse, specular, material.shininess);
+        Color.rgb += computeSpotlight_BlinnPhong(spotlight, normal, point, eye, diffuse, specular, material.shininess);
         Color.a = 1;
 
         float inv_z = 1.0 / distance(point, eye);
