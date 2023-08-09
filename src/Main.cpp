@@ -167,6 +167,7 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         gbuffer.enable();
+        glDisable(GL_FRAMEBUFFER_SRGB);
 
         glClearColor(0.f, 0.f, 0.f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
@@ -204,9 +205,11 @@ int main()
 
         gbuffer.disable();
         gbuffer.draw();
+        glDisable(GL_FRAMEBUFFER_SRGB);
 
         if (textframe.elapsed() > 1. / 24)
         {
+
             double avg = frame.avg();
             text.clear();
             text.printf("frame time: %lfms, fps: %lf", avg * 1000, 1.0 / avg);
@@ -215,6 +218,42 @@ int main()
             text.printf("x: %f, y: %f, z: %f, ", position.x, position.y, position.z);
             text.printf("speed: %f", speed);
             text.printf("culled/trees: %d/%d = %f%%", culled, world.volume, (float)culled * 100 / world.volume);
+            {
+                using std::string;
+                using std::to_string;
+
+                auto bytesize = [](int64_t B) -> string
+                {
+                    constexpr int64_t K = 1024, M = K*K, G = M*K, T = G*K;
+                    if (B >= T) return to_string((float)B / T) + " TB";
+                    else if (B >= G) return to_string((float)B / G) + " GB";
+                    else if (B >= M) return to_string((float)B / M) + " MB";
+                    else if (B >= K) return to_string((float)B / K) + " KB";
+                    return to_string(B) + " B";
+                };
+
+                int buffers = world.allocator.tree.regions + world.allocator.twig.regions;
+                string s = string("") 
+                         + to_string(buffers) 
+                         + " buffer(s), tree: (" 
+                         + to_string(world.allocator.tree.regions) 
+                         + " buffer(s), size: [";
+                for (int i = 0; i < world.allocator.tree.regions; ++i)
+                    s += bytesize(world.allocator.tree.region[i].size) + (i == world.allocator.tree.regions-1 ? "" : ", ");
+                s += "], usage: [";
+                for (int i = 0; i < world.allocator.tree.regions; ++i)
+                    s += to_string(((float)world.allocator.tree.region[i].count * 100.0) / world.allocator.tree.region[i].size) + "%%" + (i == world.allocator.tree.regions-1 ? "" : ", ");
+                s += "]), twig: ("
+                  + to_string(world.allocator.twig.regions)
+                  + " buffer(s), size: [";
+                for (int i = 0; i < world.allocator.twig.regions; ++i)
+                    s += bytesize(world.allocator.twig.region[i].size) + (i == world.allocator.twig.regions-1 ? "" : ", ");
+                s += "], usage: [";
+                for (int i = 0; i < world.allocator.twig.regions; ++i)
+                    s += to_string(((float)world.allocator.twig.region[i].count * 100.0) / world.allocator.twig.region[i].size) + "%%" + (i == world.allocator.twig.regions-1 ? "" : ", ");
+                s += "])";
+                text.printf(s.c_str());
+            }
 
             textframe.restart();
         }
@@ -315,7 +354,7 @@ void computeMVP(mat4 *p, mat4 *v)
     const mat4 R = I;
     const mat4 SRT = T * S * R;
     const mat4 M = SRT;
-    const mat4 P = glm::perspective(glm::radians(fov/2), (float)width / height, NEAR, FAR);
+    const mat4 P = glm::perspective(fov/2, (float)width / height, NEAR, FAR);
     const mat4 V = glm::lookAt(position, position + direction, up);
     const mat4 MVP = P * V * M;
 

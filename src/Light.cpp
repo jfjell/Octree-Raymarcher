@@ -153,3 +153,58 @@ void PointLightContext::draw(const glm::mat4& mvp, glm::vec3 p, glm::vec3 c)
     glBindVertexArray(0);
     glUseProgram(0);
 }
+
+void Shadowmap::init(int w, int h)
+{
+    width = w;
+    height = h;
+
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+    glGenTextures(1, &depth);
+    glBindTexture(GL_TEXTURE_2D, depth);
+    glTexImage2D(GL_TEXTURE_2D, 
+        0, 
+        GL_DEPTH_COMPONENT, 
+        width, 
+        height, 
+        0, 
+        GL_DEPTH_COMPONENT,
+        GL_FLOAT,
+        NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    glFramebufferTexture2D(GL_FRAMEBUFFER, 
+        GL_DEPTH_ATTACHMENT, 
+        GL_TEXTURE_2D, 
+        depth, 
+        0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void Shadowmap::release()
+{
+    glDeleteTextures(1, &depth);
+    glDeleteFramebuffers(1, &fbo);
+}
+
+void Shadowmap::enable()
+{
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    glViewport(0, 0, width, height);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+}
+
+void Shadowmap::disable()
+{
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+}

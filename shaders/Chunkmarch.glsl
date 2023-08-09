@@ -396,7 +396,7 @@ Material ML[8] =
     Material(vec3(0.8), vec3(0.7), vec3(0.15), 32), // sand
     Material(vec3(0.8), vec3(0.9), vec3(0.7), 10000), // grass
     Material(vec3(0.8), vec3(0.5), vec3(0), 0), // shroom
-    Material(vec3(0.8), vec3(0.4), vec3(0.9), 128), // water
+    Material(vec3(0.8), vec3(0.4), vec3(1.0), 100), // water
     Material(vec3(0), vec3(0), vec3(0), 0), // void
 };
 
@@ -489,8 +489,9 @@ void main()
         uint b = hitleaf.offset;
         vec2 uv = leafUV(point, hitleaf);
 
-        vec3 diffuse = texture(Diffuse, uv).xyz;
-        vec3 specular = texture(Specular, uv).xyz;
+        float mgamma = 2.2;
+        vec3 diffuse = pow(texture(Diffuse, uv).xyz, vec3(mgamma));
+        vec3 specular = pow(texture(Specular, uv).xyz, vec3(mgamma));
 
         Material material = ML[b];
 

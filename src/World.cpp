@@ -85,8 +85,9 @@ void World::load_gpu()
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
     shader = Shader(glCreateProgram())
-        .vertex("shaders/Parallax.Vertex.glsl")
-        .fragment("shaders/ParallaxChunk.Frag.glsl")
+        .vertex("shaders/World.Vertex.glsl")
+        .include("shaders/Chunkmarch.glsl")
+        .fragment("shaders/World.Fragment.glsl")
         .link();
 
     chunkmin_ul = glGetUniformLocation(shader, "chunkmin");
@@ -224,7 +225,7 @@ int World::index(int x, int y, int z) const
 void World::g_pyramid(int x, int z)
 {
     int i = index(x, z);
-    float amplitude = 16;
+    float amplitude = 64;
     float period = 1.0f / PYRAMID_RESOLUTION;
     float xshift = (float)x * PYRAMID_RESOLUTION;
     float yshift = 16.0f;

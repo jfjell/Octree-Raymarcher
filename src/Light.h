@@ -20,6 +20,8 @@ struct PointLight
     void bind(unsigned int shader, const char *var);
 };
 
+typedef PointLight PLight;
+
 struct DirectionalLight
 {
     glm::vec3 direction;
@@ -29,6 +31,8 @@ struct DirectionalLight
 
     void bind(unsigned int shader, const char *var);
 };
+
+typedef DirectionalLight DLight;
 
 struct Spotlight
 {
@@ -48,6 +52,8 @@ struct Spotlight
     void bind(unsigned int shader, const char *var);
 };
 
+typedef Spotlight SLight;
+
 struct PointLightContext
 {
     unsigned int vao, vbo, ebo, shader;
@@ -55,6 +61,18 @@ struct PointLightContext
     void init();
     void release();
     void draw(const glm::mat4& mvp, glm::vec3 p, glm::vec3 c);
+};
+
+struct Shadowmap
+{
+    unsigned int fbo, depth; 
+    int width, height;
+    int viewport[4];
+
+    void init(int w, int h);
+    void release();
+    void enable();
+    void disable();
 };
 
 struct Material
