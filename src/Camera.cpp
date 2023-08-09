@@ -17,7 +17,10 @@ mat4 PerspectiveCamera::view()
     roll_deg = fmod(roll_deg, 360.0);
     
     vec3 x(1, 0, 0), y(0, 1, 0), z(0, 0, 1);
-    quat q = angleAxis(pitch_deg, x) * angleAxis(yaw_deg, y) * angleAxis(roll_deg, z);
+    // quat q = angleAxis(pitch_deg, x) * angleAxis(yaw_deg, y) * angleAxis(roll_deg, z);
+
+    vec3 euler(pitch_deg, yaw_deg, roll_deg);
+    quat q(glm::radians(euler));
 
     direction = q * z;
     right = q * -x;

@@ -27,6 +27,7 @@
 #include "Worm.h"
 #include "Skybox.h"
 #include "Light.h"
+#include "Camera.h"
 
 #define FAR 8192.f
 #define NEAR 0.125f
@@ -35,26 +36,27 @@ SDL_Window *window;
 SDL_GLContext glContext;
 bool running = true;
 int width = 1920, height = 1080;
-glm::vec3 position = glm::vec3(0.f, 0.f, 0.f);
-float vertAngle = 0.f, horzAngle = 0.f;
-float fov = 90.f;
-float speed = 4.8f, sensitivity = 0.004f;
+// glm::vec3 position = glm::vec3(0.f, 0.f, 0.f);
+// float vertAngle = 0.f, horzAngle = 0.f;
+// float fov = 90.f;
+float speed = 4.8f, sensitivity = 0.4f;
 int frameCount = 0;
-glm::vec3 direction, right, up;
-glm::mat4 mvp;
+// glm::vec3 direction, right, up;
+// glm::mat4 mvp;
 Input input;
 ImagCube imag;
 Text text;
 World world;
 GBuffer gbuffer;
 Counter sw;
+PerspectiveCamera camera;
 bool cursor = false;
 
 using glm::mat4;
 using glm::vec3;
 
 void computeTarget(const World *world);
-void computeMVP(mat4 *p, mat4 *v);
+// void computeMVP(mat4 *p, mat4 *v);
 void initialize();
 void deinitialize();
 void initializeControls();
@@ -156,12 +158,26 @@ int main()
     spotlight.linear = 0.045;
     spotlight.quadratic = 0.0075;
 
+    camera.position = vec3(0);
+    camera.direction = vec3(0, 0, 1);
+    camera.right = vec3(-1, 0, 0);
+    camera.up = vec3(0, 1, 0);
+    camera.near = NEAR;
+    camera.far = FAR;
+    camera.fov_deg = 90;
+    camera.width = width;
+    camera.height = height;
+    camera.yaw_deg = 0;
+    camera.pitch_deg = 0;
+    camera.roll_deg = 0;
+
     while (running) 
     {
         input.poll();
 
-        mat4 p, v;
-        computeMVP(&p, &v);
+        mat4 p = camera.proj();
+        mat4 v = camera.view();
+        mat4 mvp = p * v;
 
         glClearColor(0.f, 0.f, 0.f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -184,7 +200,7 @@ int main()
         directionalLight.bind(world.shader, "directionalLight");
         spotlight.bind(world.shader, "spotlight");
 
-        world.draw(mvp, position);
+        world.draw(mvp, camera.position);
         pointLightContext.draw(mvp, pointLight.position, pointLight.color);
         pointLightContext.draw(mvp, spotlight.position, spotlight.diffuse);
 
@@ -214,8 +230,8 @@ int main()
             text.clear();
             text.printf("frame time: %lfms, fps: %lf", avg * 1000, 1.0 / avg);
             text.printf("w: %d, h: %d", width, height);
-            text.printf("fov: %f, h: %f, v: %f", fov, glm::degrees(horzAngle), glm::degrees(vertAngle));
-            text.printf("x: %f, y: %f, z: %f, ", position.x, position.y, position.z);
+            text.printf("fov: %f, yaw: %f, pitch: %f, roll: %f", camera.fov_deg, camera.yaw_deg, camera.pitch_deg, camera.roll_deg);
+            text.printf("x: %f, y: %f, z: %f, ", camera.position.x, camera.position.y, camera.position.z);
             text.printf("speed: %f", speed);
             text.printf("culled/trees: %d/%d = %f%%", culled, world.volume, (float)culled * 100 / world.volume);
             {
@@ -279,7 +295,7 @@ int main()
 void computeTarget(const World *w)
 {
     vec3 sigma = vec3(0);
-    imag.real = chunkmarch(position, direction, w, &sigma);
+    imag.real = chunkmarch(camera.position, camera.direction, w, &sigma);
     imag.position(sigma);
 }
 
@@ -334,6 +350,7 @@ void replace()
 
 using glm::mat4;
 
+/*
 void computeMVP(mat4 *p, mat4 *v)
 {
     using glm::mat4;
@@ -363,6 +380,7 @@ void computeMVP(mat4 *p, mat4 *v)
 
     mvp = MVP;
 }
+*/
 
 void initialize()
 {
@@ -422,10 +440,10 @@ void initializeControls()
     input.bind(SDL_QUIT, [&]() { running = false; });
     input.bindKey(SDLK_UP, [&]() { speed = (float)glm::clamp(speed * 2.0, 0.001, 100.0); });
     input.bindKey(SDLK_DOWN, [&]() { speed = (float)glm::clamp(speed / 2.0, 0.001, 100.0); });
-    input.bindKey('w', [&]() { position += direction * speed; });
-    input.bindKey('s', [&]() { position -= direction * speed; });
-    input.bindKey('a', [&]() { position -= right * speed; });
-    input.bindKey('d', [&]() { position += right * speed; });
+    input.bindKey('w', [&]() { camera.position += camera.direction * speed; });
+    input.bindKey('s', [&]() { camera.position -= camera.direction * speed; });
+    input.bindKey('a', [&]() { camera.position -= camera.right * speed; });
+    input.bindKey('d', [&]() { camera.position += camera.right * speed; });
     input.bindKey('+', [&]() { imag.scale += 0.5; });
     input.bindKey('-', [&]() { imag.scale = glm::max(imag.scale - 0.5f, 0.0f); });
     input.bindKey('x', [&]() { destroy(); });
@@ -445,8 +463,8 @@ void initializeControls()
     input.bindKey('4', [&]() { world.shift(glm::ivec3(0, -1, 0)); });
     input.bindKey('5', [&]() { world.shift(glm::ivec3(0, 0, 1)); });
     input.bindKey('6', [&]() { world.shift(glm::ivec3(0, 0, -1)); });
-    input.bindKey(SDLK_SPACE, [&]() { position += glm::vec3(0.f, 1.f, 0.f) * speed; });
-    input.bindKey(SDLK_LSHIFT, [&]() { position -= glm::vec3(0.f, 1.f, 0.f) * speed; });
+    input.bindKey(SDLK_SPACE, [&]() { camera.position += glm::vec3(0.f, 1.f, 0.f) * speed; });
+    input.bindKey(SDLK_LSHIFT, [&]() { camera.position -= glm::vec3(0.f, 1.f, 0.f) * speed; });
     input.bindKey(SDLK_ESCAPE, [&]() { running = false; });
 
     input.bindKey(SDLK_TAB, [&]() { 
@@ -456,19 +474,22 @@ void initializeControls()
     });
 
     input.bind(SDL_MOUSEBUTTONDOWN, [&](SDL_Event&e) {
-        if (e.button.button != SDL_BUTTON_LEFT) return;
-        SDL_ShowCursor(SDL_DISABLE);
-        SDL_SetRelativeMouseMode(SDL_TRUE);
-        cursor = false;
+        if (e.button.button == SDL_BUTTON_LEFT) 
+        {
+            SDL_ShowCursor(SDL_DISABLE);
+            SDL_SetRelativeMouseMode(SDL_TRUE);
+            cursor = false;
+        }
+        else if (e.button.button == SDL_BUTTON_X1)
+            camera.roll_deg -= (float)sensitivity * 10;
+        else if (e.button.button == SDL_BUTTON_X2)
+            camera.roll_deg += (float)sensitivity * 10;
     });
 
     input.bind(SDL_MOUSEMOTION, [&](SDL_Event& e) {
         if (!cursor) {
-            horzAngle -= (float)e.motion.xrel * sensitivity;
-            vertAngle -= (float)e.motion.yrel * sensitivity;
-            float orth = glm::radians(90.f);
-            if (vertAngle >= orth) vertAngle = orth;
-            if (vertAngle <= -orth) vertAngle = -orth;
+            camera.yaw_deg -= (float)e.motion.xrel * sensitivity;
+            camera.pitch_deg += (float)e.motion.yrel * sensitivity;
         }
     });
 }
