@@ -25,6 +25,20 @@ struct GPUChunk
 
 static_assert(sizeof(GPUChunk) % 32 == 0);
 
+struct WorldShaderContext
+{
+    static constexpr int CHUNK_SSBO_BINDING = 2;
+    static constexpr int TREE1_SSBO_BINDING = 4;
+    static constexpr int TWIG1_SSBO_BINDING = 5;
+
+    unsigned int shader;
+    int chunkmin_ul, chunkmax_ul, chunksize_ul, w_ul, h_ul, d_ul, eye_ul, model_ul, mvp_ul;
+    int diffuse_ul, specular_ul;
+
+    WorldShaderContext(unsigned int s = 0) : shader(s) { }
+    void bind_ul();
+};
+
 struct World
 {
     RootAllocator allocator;
@@ -34,9 +48,8 @@ struct World
     int width, height, depth, plane, volume, chunksize;
     glm::ivec3 chunkcoordmin;
     TextureAtlas atlas;
-    unsigned int vao, vbo, ebo, shader, chunk_ssbo;
-    int chunkmin_ul, chunkmax_ul, chunksize_ul, w_ul, h_ul, d_ul, eye_ul, model_ul, mvp_ul;
-    int diffuse_ul, specular_ul;
+    WorldShaderContext shader_context;
+    unsigned int vao, vbo, ebo, chunk_ssbo;
 
     glm::ivec3 index_float(glm::vec3 p) const;
     int index(int x, int y, int z) const;

@@ -204,11 +204,11 @@ int main()
         pointLight.position.x = 50.0 + cos(t) * 10.f;
         pointLight.position.z = 65.0 + sin(t) * 10.f;
 
-        glUseProgram(world.shader);
+        glUseProgram(world.shader_context.shader);
 
-        pointLight.bind(world.shader, "pointLight");
-        directionalLight.bind(world.shader, "directionalLight");
-        spotlight.bind(world.shader, "spotlight");
+        pointLight.bind(world.shader_context.shader, "pointLight");
+        directionalLight.bind(world.shader_context.shader, "directionalLight");
+        spotlight.bind(world.shader_context.shader, "spotlight");
 
         world.draw(mvp, camera.position);
         pointLightContext.draw(mvp, pointLight.position, pointLight.color);

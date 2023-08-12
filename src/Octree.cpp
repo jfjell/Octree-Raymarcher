@@ -452,14 +452,15 @@ int is_monotwig(const Octwig *twig)
     return x;
 }
 
-// Returns -1 on false, otherwise returns the type
+// Returns -1 on false, otherwise returns the material
 int is_monobranch(const Ocroot *root, uint32_t offset)
 {
-    Octree t = root->tree[offset];
-    assert(t.type() == BRANCH);
-    uint32_t x = root->tree[t.offset()].type();
+    Octree tree = root->tree[offset];
+    assert(tree.type() == BRANCH);
+    uint32_t t = root->tree[tree.offset()].type();
+    uint32_t x = (uint32_t)root->tree[tree.offset()].offset();
     for (int i = 1; i < 8; ++i)
-        if (root->tree[t.offset() + i].type() != x)
+        if (root->tree[tree.offset() + i].type() != t || root->tree[tree.offset() + i].offset() != x)
             return -1;
     return x;
 }
@@ -555,7 +556,21 @@ int defragcopy(const Ocroot *from, Ocroot *to, uint32_t f, uint32_t t)
             maxdepth = d > maxdepth ? d : maxdepth;
         }
 
-        if (maxdepth <= TWIG_DEPTH)
+        if (maxdepth == 1)
+        {
+            int x = is_monobranch(to, t);
+            if (x != -1)
+            {
+                // Branch with leaves of only one type!
+                to->trees = trees;
+                to->twigs = twigs;
+
+                to->tree[t] = Octree(!x ? EMPTY : LEAF, x);
+                return 1;
+            }
+        }
+        
+        if (maxdepth == TWIG_DEPTH)
         {
             // Made a branch when a twig or leaf/empty would suffice!
             // Reset the tree to its original state and make a twig

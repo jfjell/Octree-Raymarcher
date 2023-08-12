@@ -84,12 +84,17 @@ void World::load_gpu()
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-    shader = Shader(glCreateProgram())
+    shader_context.shader = Shader(glCreateProgram())
         .vertex("shaders/World.Vertex.glsl")
         .include("shaders/Chunkmarch.glsl")
         .fragment("shaders/World.Fragment.glsl")
         .link();
 
+    shader_context.bind_ul();
+}
+
+void WorldShaderContext::bind_ul()
+{
     chunkmin_ul = glGetUniformLocation(shader, "chunkmin");
     chunkmax_ul = glGetUniformLocation(shader, "chunkmax");
     chunksize_ul = glGetUniformLocation(shader, "chunksize");
@@ -120,7 +125,7 @@ void World::deinit()
     glDeleteBuffers(1, &vbo);
     glDeleteBuffers(1, &ebo);
     glDeleteBuffers(1, &chunk_ssbo);
-    glDeleteProgram(shader);
+    glDeleteProgram(shader_context.shader);
 
     for (int i = 0; i < volume; ++i)
     {
@@ -162,25 +167,27 @@ void World::draw(mat4 mvp, vec3 eye)
     glDepthFunc(GL_LESS);
 
     glBindVertexArray(vao);
-    glUseProgram(shader);
 
-    glUniform3fv(chunkmin_ul, 1, glm::value_ptr(chunkmin));
-    glUniform3fv(chunkmax_ul, 1, glm::value_ptr(chunkmax));
-    glUniform1f(chunksize_ul, (float)chunksize);
-    glUniform1i(w_ul, width);
-    glUniform1i(h_ul, height);
-    glUniform1i(d_ul, depth);
-    glUniform3fv(eye_ul, 1, glm::value_ptr(eye));
-    glUniformMatrix4fv(model_ul, 1, GL_FALSE, glm::value_ptr(model));
-    glUniformMatrix4fv(mvp_ul, 1, GL_FALSE, glm::value_ptr(mvp));
+    const WorldShaderContext& c = shader_context;
+    glUseProgram(c.shader);
 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, chunk_ssbo);
+    glUniform3fv(c.chunkmin_ul, 1, glm::value_ptr(chunkmin));
+    glUniform3fv(c.chunkmax_ul, 1, glm::value_ptr(chunkmax));
+    glUniform1f(c.chunksize_ul, (float)chunksize);
+    glUniform1i(c.w_ul, width);
+    glUniform1i(c.h_ul, height);
+    glUniform1i(c.d_ul, depth);
+    glUniform3fv(c.eye_ul, 1, glm::value_ptr(eye));
+    glUniformMatrix4fv(c.model_ul, 1, GL_FALSE, glm::value_ptr(model));
+    glUniformMatrix4fv(c.mvp_ul, 1, GL_FALSE, glm::value_ptr(mvp));
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, WorldShaderContext::CHUNK_SSBO_BINDING, chunk_ssbo);
     allocator.bind();
 
-    glUniform1i(diffuse_ul, 0);
+    glUniform1i(c.diffuse_ul, 0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, atlas.diffuse);
-    glUniform1i(specular_ul, 1);
+    glUniform1i(c.specular_ul, 1);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, atlas.specular);
 
