@@ -27,7 +27,8 @@ struct Octree
 
 static_assert(sizeof(Octree) == sizeof(uint32_t));
 
-#define TWIG_LEVELS 2
+#define TWIG_DEPTH 2
+#define TWIG_LEVELS TWIG_DEPTH
 #define TWIG_SIZE 4
 #define TWIG_WORDS (8*8)
 

@@ -118,21 +118,6 @@ Leaf traverse(vec3 p) {
     return tree;
 }
 
-const vec4 materialLookup[] = {
-    vec4(0, 0, 0, 0), // Empty
-    vec4(0.5, 0.5, 0.5, 1), // Stone
-    vec4(0.7, 0.5, 0.3, 1), // Dirt
-    vec4(0.7, 0.8, 0.5, 1), // Sand
-    vec4(0.2, 0.6, 0.4, 1), // Grass
-    vec4(0.8, 0.1, 0.1, 1), // Custom
-    vec4(0.1, 0.3, 0.8, 0.5)  // Water
-};
-
-vec4 Bark(uint i) {
-    return materialLookup[i];
-}
-
-
 bool twigmarch(uint index, uint ignore,
     vec3 a, vec3 b, vec3 g, 
     vec3 cmin, float size, float leafsize, 
@@ -273,6 +258,21 @@ void main() {
         vec4 bark = Bark(hit.index);
     }
     */
+
+const vec4 materialLookup[] = {
+    vec4(0, 0, 0, 0), // Empty
+    vec4(0.5, 0.5, 0.5, 1), // Stone
+    vec4(0.7, 0.5, 0.3, 1), // Dirt
+    vec4(0.7, 0.8, 0.5, 1), // Sand
+    vec4(0.2, 0.6, 0.4, 1), // Grass
+    vec4(0.8, 0.1, 0.1, 1), // Custom
+    vec4(0.1, 0.3, 0.8, 0.5)  // Water
+};
+
+vec4 Bark(uint i) {
+    return materialLookup[i];
+}
+
 
     Leaf hit;
     float sigma = treemarch(alpha, beta, gamma, 0, hit);

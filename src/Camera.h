@@ -25,7 +25,7 @@ struct OrthoCamera
     using vec3 = glm::vec3;
     using mat4 = glm::mat4;
 
-    vec3 position;
+    vec3 direction;
     int width, height;
     float near, far;
 

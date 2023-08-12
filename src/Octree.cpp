@@ -8,10 +8,16 @@
 #include <glm/gtc/noise.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "Octree.h"
+#include "MisraGries.h"
 #include "BoundsPyramid.h"
 #include "Traverse.h"
 
 using glm::vec3;
+using glm::ivec3;
+using glm::bvec3;
+
+using glm::all;
+using glm::greaterThanEqual;
 
 unsigned Octwig::word(unsigned x, unsigned y, unsigned z)
 {
@@ -436,151 +442,223 @@ void Ocroot::replace(glm::vec3 cmin, glm::vec3 cmax, uint16_t mat, Ocdelta *dtre
     buildCube(this, 0, position, size, 0, cmin, cmax, mat, dtree, dtwig);
 }
 
-static void defragcopy(const Ocroot *from, Ocroot *to, uint32_t f, uint32_t t)
+// Returns -1 if more than one material is found, otherwise returns the material
+int is_monotwig(const Octwig *twig)
 {
+    uint16_t x = twig->leaf[0];
+    for (int i = 1; i < TWIG_WORDS; ++i)
+        if (twig->leaf[i] != x)
+            return -1;
+    return x;
+}
+
+// Returns -1 on false, otherwise returns the type
+int is_monobranch(const Ocroot *root, uint32_t offset)
+{
+    Octree t = root->tree[offset];
+    assert(t.type() == BRANCH);
+    uint32_t x = root->tree[t.offset()].type();
+    for (int i = 1; i < 8; ++i)
+        if (root->tree[t.offset() + i].type() != x)
+            return -1;
+    return x;
+}
+
+uint16_t descend(const Ocroot *root, uint32_t offset, vec3 cmin, float size, vec3 p)
+{
+    vec3 cmax = cmin + size;
+
+    assert(isInsideCube(p, cmin, cmax));
+
+    Octree t = root->tree[offset];
+    if (t.type() == EMPTY)
+        return 0;
+    else if (t.type() == LEAF)
+        return (uint16_t)t.offset();
+    else if (t.type() == TWIG)
+    {
+        float leafsize = size / (1 << TWIG_DEPTH);
+        ivec3 i = ivec3((p - cmin) / leafsize);
+        assert(all(greaterThanEqual(i, ivec3(0))) && all(greaterThanEqual(ivec3(TWIG_SIZE - 1), i)));
+        unsigned w = Octwig::word(i.x, i.y, i.z);
+        return root->twig[t.offset()].leaf[w];
+    }
+    else
+    {
+        float halfsize = size * 0.5f;
+        vec3 cmid = cmin + halfsize;
+        bvec3 geq = greaterThanEqual(p, cmid);
+        unsigned i = Octree::branch(geq.x, geq.y, geq.z);
+        return descend(root, (uint32_t)t.offset() + i, cmin + vec3(geq) * halfsize, halfsize, p);
+    }
+}
+
+// Returns the depth
+int defragcopy(const Ocroot *from, Ocroot *to, uint32_t f, uint32_t t)
+{
+    auto twig = Octwig();
     Octree tree = from->tree[f];
     if (tree.type() == EMPTY)
     {
+        // Empty nodes and leaves are copied as is
         to->tree[t] = Octree(EMPTY, 0);
+        return 1;
     }
     else if (tree.type() == LEAF)
     {
         to->tree[t] = Octree(LEAF, (uint32_t)tree.offset());
+        return 1;
     }
     else if (tree.type() == TWIG)
     {
-        if (to->twigs >= to->twigstoragesize)
-            to->twig = (Octwig *)realloc(to->twig, (to->twigstoragesize *= 2) * sizeof(Octwig));
+        twig = from->twig[tree.offset()];
 
-        uint32_t pos = (uint32_t)to->twigs++;
-        to->tree[t] = Octree(TWIG, pos);
-        to->twig[pos] = from->twig[tree.offset()];
+        makeTwig: 
+
+        int x = is_monotwig(&twig);
+        if (x != -1)
+        {
+            // Twig is only one material => make it an empty branch or a leaf
+            to->tree[t] = Octree(!x ? EMPTY : LEAF, x);
+
+            return 1;
+        }
+        else
+        {
+            // Copy the twig as is
+            if (to->twigs >= to->twigstoragesize)
+                to->twig = (Octwig *)realloc(to->twig, (to->twigstoragesize *= 2) * sizeof(Octwig));
+
+            uint32_t i = (uint32_t)to->twigs++;
+            to->tree[t] = Octree(TWIG, i);
+            to->twig[i] = twig;
+
+            return TWIG_DEPTH + 1;
+        }
     }
-    else if (tree.type() == BRANCH)
+    else // if (tree.type() == BRANCH)
     {
+        uint64_t trees = to->trees;
+        uint64_t twigs = to->twigs;
+
         if (to->trees + 8 >= to->treestoragesize)
             to->tree = (Octree *)realloc(to->tree, (to->treestoragesize *= 2) * sizeof(Octree));
 
-        uint32_t pos = (uint32_t)to->trees;
-        to->tree[t] = Octree(BRANCH, pos);
+        uint32_t i = (uint32_t)to->trees;
+        to->tree[t] = Octree(BRANCH, i);
         to->trees += 8;
 
-        for (int i = 0; i < 8; ++i)
-            defragcopy(from, to, (uint32_t)tree.offset() + i, pos + i);
-    }
-}
-
-Ocroot Ocroot::defragcopy()
-{
-    Ocroot to;
-    to.position = position;
-    to.size = size;
-    to.depth = depth;
-    to.trees = 1;
-    to.twigs = 0;
-    to.treestoragesize = 16;
-    to.twigstoragesize = 16;
-    to.tree = (Octree *)malloc(to.treestoragesize * sizeof(Octree));
-    to.twig = (Octwig *)malloc(to.twigstoragesize * sizeof(Octwig));
-
-    ::defragcopy(this, &to, 0, 0);
-
-    return to;
-}
-
-size_t depth(const Ocroot *root, uint32_t offset)
-{
-    Octree tree = root->tree[offset];
-    if (tree.type() == LEAF || tree.type() == EMPTY)
-        return 1;
-    if (tree.type() == TWIG)
-        return TWIG_LEVELS;
-    assert(tree.type() == BRANCH);
-
-    size_t max = 0;
-    for (uint32_t i = 0; i < 8; ++i)
-        max = glm::max(max, depth(root, (uint32_t)tree.offset() + i));
-    return max + 1;
-} 
-
-template <typename T>
-size_t count(T x, const T *xs, size_t n)
-{
-    size_t c = 0;
-    for (size_t i = 0; i < n; ++i)
-        c += (xs[i] == x);
-    return c;
-}
-
-template <typename T>
-T majority(const T *xs, size_t n)
-{
-    size_t j = 0, c = count(xs[0], xs, n);
-    for (size_t i = 1; i < n; ++i)
-    {
-        if (xs[i] == 0) continue;
-        size_t d = count(xs[i], xs, n);
-        if (c > d) continue;
-        c = d;
-        j = i;
-    }
-    return xs[j];
-}
-
-static float density(const Ocroot *root, uint32_t offset, 
-    vec3 bmin, float size, 
-    vec3 cmin, vec3 cmax, 
-    uint16_t *maj)
-{
-    using glm::bvec3;
-    using glm::uvec3;
-
-    Octree tree = root->tree[offset];
-    if (tree.type() == EMPTY)
-    {
-        *maj = 0;
-        return 0.0;
-    }
-    else if (tree.type() == LEAF)
-    {
-        *maj = (uint16_t)tree.offset();
-        return 1.0;
-    }
-    else if (tree.type() == TWIG)
-    {
-        float leafsize = size / (1 << TWIG_LEVELS);
-        vec3 tmin = glm::clamp((cmin - bmin) / leafsize, 0.0f, (float)TWIG_SIZE);
-        vec3 tmax = glm::clamp((cmax - bmin) / leafsize, 0.0f, (float)TWIG_SIZE);
-
-        uint16_t cellulose[8];
-        size_t leaves = 0;
-        for (unsigned int z = (unsigned)tmin.z; (float)z < tmax.z; ++z)
-            for (unsigned int y = (unsigned)tmin.y; (float)y < tmax.y; ++y)
-                for (unsigned int x = (unsigned)tmin.x; (float)x < tmax.x; ++x)
-                    cellulose[leaves++] = root->twig[tree.offset()].leaf[Octwig::word(x, y, z)];
-        assert(leaves == 8);
-        *maj = majority(cellulose, 8);
-        return (float)leaves * 0.125f;
-    }
-    else
-    {
-        assert(tree.type() == BRANCH);
-
-        size_t count = 0;
-        float sum = 0.0;
-        for (unsigned int i = 0; i < 8; ++i)
+        int maxdepth = 0;
+        for (int j = 0; j < 8; ++j)
         {
-            bvec3 g;
-            Octree::cut(i, &g.x, &g.y, &g.z);
-            float halfsize = size * 0.5f;
-            vec3 smin = bmin + vec3(g) * halfsize;
-            vec3 smax = smin + halfsize;
-            if (!cubesIntersect(cmin, cmax, smin, smax)) continue;
-            sum += density(root, (uint32_t)tree.offset() + i, smin, halfsize, cmin, cmax, maj);
-            count++;
+            int d = defragcopy(from, to, (uint32_t)tree.offset() + j, i + j);
+            maxdepth = d > maxdepth ? d : maxdepth;
         }
-        assert(count == 1); // Only allow one intersection
-        return sum;
+
+        if (maxdepth <= TWIG_DEPTH)
+        {
+            // Made a branch when a twig or leaf/empty would suffice!
+            // Reset the tree to its original state and make a twig
+            to->trees = trees;
+            to->twigs = twigs;
+
+            float leafsize = 1.0 / (1 << TWIG_DEPTH);
+            float halfleafsize = leafsize * 0.5f;
+            for (unsigned z = 0; z < TWIG_SIZE; ++z)
+            {
+                for (unsigned y = 0; y < TWIG_SIZE; ++y)
+                {
+                    for (unsigned x = 0; x < TWIG_SIZE; ++x)
+                    {
+                        vec3 p = vec3(x, y, z) * leafsize + halfleafsize;
+                        unsigned w = Octwig::word(x, y, z);
+                        twig.leaf[w] = descend(to, t, vec3(0), 1.0, p);
+                    }
+                }
+            }
+
+            goto makeTwig;
+        }
+        return maxdepth + 1;
+    }
+}
+
+void defragcopy(const Ocroot *from, Ocroot *to)
+{
+    to->position = from->position;
+    to->size = from->size;
+    to->depth = from->depth;
+    to->trees = 1;
+    to->twigs = 0;
+    to->treestoragesize = 16;
+    to->twigstoragesize = 16;
+    to->tree = (Octree *)malloc(to->treestoragesize * sizeof(Octree));
+    to->twig = (Octwig *)malloc(to->twigstoragesize * sizeof(Octwig));
+    
+    ::defragcopy(from, to, 0, 0);
+
+    // Did we allocate too much memory?
+    while (to->trees > 0 && to->treestoragesize > 16 && to->treestoragesize / to->trees >= 4)
+        to->tree = (Octree *)realloc(to->tree, (to->treestoragesize /= 2) * sizeof(Octree));
+
+    while (to->twigs > 0 && to->twigstoragesize > 16 && to->twigstoragesize / to->twigs >= 4)
+        to->twig = (Octwig *)realloc(to->twig, (to->twigstoragesize /= 2) * sizeof(Octwig));
+}
+
+
+using glm::bvec3;
+using glm::uvec3;
+
+// Returns the depth
+template <int K> 
+static int density(const Ocroot *root, uint32_t offset, vec3 bmin, float size, vec3 cmin, vec3 cmax, MisraGriesCounter<K> *c, unsigned int n)
+{
+    Octree t = root->tree[offset];
+    if (t.type() == EMPTY)
+    {
+        c->count(0, n);
+        return 1;
+    }
+    else if (t.type() == LEAF)
+    {
+        c->count(t.offset(), n);
+        return 1;
+    }
+    else if (t.type() == TWIG)
+    {
+        float leafsize = size / (1 << TWIG_DEPTH);
+        vec3 subtwigmin = glm::clamp((cmin - bmin) / leafsize, 0.0f, (float)TWIG_SIZE);
+        vec3 subtwigmax = glm::clamp((cmax - bmin) / leafsize, 0.0f, (float)TWIG_SIZE);
+
+        unsigned int m = n / (1 << (TWIG_DEPTH*3));
+        for (unsigned z = (unsigned)subtwigmin.z; (float)z < subtwigmax.z; ++z)
+        {
+            for (unsigned y = (unsigned)subtwigmin.y; (float)y < subtwigmax.y; ++y)
+            {
+                for (unsigned x = (unsigned)subtwigmin.x; (float)x < subtwigmax.x; ++x)
+                {
+                    unsigned w = Octwig::word(x, y, z);
+                    c->count(root->twig[t.offset()].leaf[w], m);
+                }
+            }
+        }
+
+        return TWIG_DEPTH;
+    }
+    else // if (t.type() == BRANCH)
+    {
+        float halfsize = size * 0.5f;
+        int d = 0;
+        for (unsigned i = 0; i < 8; ++i)
+        {
+            bool gx, gy, gz;
+            Octree::cut(i, &gx, &gy, &gz);
+            vec3 nextmin = bmin + vec3(gx, gy, gz) * halfsize;
+            vec3 nextmax = nextmin + halfsize;
+            if (cubesIntersect(cmin, cmax, nextmin, nextmax))
+                d = glm::max(d, density(root, (uint32_t)t.offset() + i, nextmin, halfsize, cmin, cmax, c, n / 8));
+        }
+        return d + 1;
     }
 }
 
@@ -601,39 +679,43 @@ static void lodmm(const Ocroot *from, Ocroot *to, uint32_t f, uint32_t t, size_t
         if (depth == to->depth - TWIG_LEVELS)
         {
             // Make a new twig, sampling the average material of the twigs below
-            float eps = 1.0 / 4096.0;
-
-            assert(::depth(from, f) == TWIG_LEVELS+1);
+            const float EPS = 1.0 / 256.0;
 
             if (to->twigs >= to->twigstoragesize)
                 to->twig = (Octwig *)realloc(to->twig, (to->twigstoragesize *= 2) * sizeof(Octwig));
 
-            uint32_t pos = (uint32_t)to->twigs++;
-            to->tree[t] = Octree(TWIG, pos);
-            to->twig[pos] = Octwig();
+            uint32_t i = (uint32_t)to->twigs++;
+            to->tree[t] = Octree(TWIG, i);
+            to->twig[i] = Octwig();
 
-            for (unsigned int z = 0; z < TWIG_SIZE; ++z)
+            float leafsize = 1.0 / (1 << TWIG_LEVELS);
+            MisraGriesCounter<8> counter;
+            for (unsigned z = 0; z < TWIG_SIZE; ++z)
             {
-                for (unsigned int y = 0; y < TWIG_SIZE; ++y)
+                for (unsigned y = 0; y < TWIG_SIZE; ++y)
                 {
-                    for (unsigned int x = 0; x < TWIG_SIZE; ++x)
+                    for (unsigned x = 0; x < TWIG_SIZE; ++x)
                     {
-                        unsigned int i = Octwig::word(x, y, z);
-                        float leafsize = 1.0 / (1 << TWIG_LEVELS);
-                        vec3 leafmin = vec3(x, y, z) * leafsize + eps;
-                        vec3 leafmax = leafmin + leafsize - eps * 2;
-                        uint16_t mat = 0;
-                        if (density(from, f, vec3(0), 1.0, leafmin, leafmax, &mat) >= 0.5)
-                            to->twig[pos].leaf[i] = mat;
-                        else
-                            to->twig[pos].leaf[i] = 0;
+                        unsigned w = Octwig::word(x, y, z);
+
+                        vec3 leafmin = vec3(x, y, z) * leafsize;
+                        vec3 leafmax = leafmin + leafsize;
+
+                        vec3 adjleafmin = leafmin + EPS;
+                        vec3 adjleafmax = leafmax - EPS;
+
+                        counter.empty();
+                        unsigned int n = (1 << ((TWIG_DEPTH+1)*3)); // Initial multiplier
+                        assert(density(from, f, vec3(0), 1.0, adjleafmin, adjleafmax, &counter, n) <= (int)(from->depth - depth));
+
+                        to->twig[i].leaf[w] = (uint16_t)counter.majority();
                     }
                 }
             }
         }
         else
         {
-            // Same as defragmentation algorithm, only replacing the recursive call
+            // Same as copy algorithm, only replacing the recursive call
             if (to->trees + 8 >= to->treestoragesize)
                 to->tree = (Octree *)realloc(to->tree, (to->treestoragesize *= 2) * sizeof(Octree));
 

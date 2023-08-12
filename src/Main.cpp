@@ -142,7 +142,7 @@ int main()
 
     DirectionalLight directionalLight;
     directionalLight.direction = glm::normalize(vec3(-0.2, -1.0, -0.3));
-    directionalLight.ambient = vec3(0.2, 0.2, 0.2);
+    directionalLight.ambient = vec3(0.6, 0.6, 0.8);
     directionalLight.diffuse = vec3(0.3, 0.3, 0.6);
     directionalLight.specular = vec3(0);
 
@@ -170,6 +170,16 @@ int main()
     camera.yaw_deg = 0;
     camera.pitch_deg = 0;
     camera.roll_deg = 0;
+
+    Shadowmap shadowmap;
+    shadowmap.init(width, height);
+
+    OrthoCamera dcamera;
+    dcamera.direction = directionalLight.direction;
+    dcamera.near = NEAR;
+    dcamera.far = FAR;
+    dcamera.width = width;
+    dcamera.height = height;
 
     while (running) 
     {
@@ -229,45 +239,45 @@ int main()
             double avg = frame.avg();
             text.clear();
             text.printf("frame time: %lfms, fps: %lf", avg * 1000, 1.0 / avg);
-            text.printf("w: %d, h: %d", width, height);
+            text.printf("width: %d, height: %d", width, height);
             text.printf("fov: %f, yaw: %f, pitch: %f, roll: %f", camera.fov_deg, camera.yaw_deg, camera.pitch_deg, camera.roll_deg);
             text.printf("x: %f, y: %f, z: %f, ", camera.position.x, camera.position.y, camera.position.z);
             text.printf("speed: %f", speed);
+            text.printf("grid size: %dx%dx%d = %d", world.width, world.height, world.depth, world.volume);
             text.printf("culled/trees: %d/%d = %f%%", culled, world.volume, (float)culled * 100 / world.volume);
             {
                 using std::string;
                 using std::to_string;
 
-                auto bytesize = [](int64_t B) -> string
+                auto bytesize = [&](int64_t B) -> string
                 {
                     constexpr int64_t K = 1024, M = K*K, G = M*K, T = G*K;
-                    if (B >= T) return to_string((float)B / T) + " TB";
-                    else if (B >= G) return to_string((float)B / G) + " GB";
-                    else if (B >= M) return to_string((float)B / M) + " MB";
-                    else if (B >= K) return to_string((float)B / K) + " KB";
+                    if (B >= T) return to_string(B / T) + " TB";
+                    if (B >= G) return to_string(B / G) + " GB";
+                    if (B >= M) return to_string(B / M) + " MB";
+                    if (B >= K) return to_string(B / K) + " KB";
                     return to_string(B) + " B";
+                };
+
+                auto allocator_to_string = [&](Allocator a) -> string
+                {
+                    string s = "" + to_string(a.regions) + " buffers; size: ";
+                    for (int i = 0; i < a.regions; ++i)
+                        s += bytesize(a.region[i].size) + (i == a.regions - 1 ? "" : ", ");
+                    s += "; used: ";
+                    for (int i = 0; i < a.regions; ++i)
+                        s += "~" + to_string(a.region[i].count * 100 / a.region[i].size) + "%%" + (i == a.regions - 1 ? "" : ", ");
+                    return s;
                 };
 
                 int buffers = world.allocator.tree.regions + world.allocator.twig.regions;
                 string s = string("") 
                          + to_string(buffers) 
-                         + " buffer(s), tree: (" 
-                         + to_string(world.allocator.tree.regions) 
-                         + " buffer(s), size: [";
-                for (int i = 0; i < world.allocator.tree.regions; ++i)
-                    s += bytesize(world.allocator.tree.region[i].size) + (i == world.allocator.tree.regions-1 ? "" : ", ");
-                s += "], usage: [";
-                for (int i = 0; i < world.allocator.tree.regions; ++i)
-                    s += to_string(((float)world.allocator.tree.region[i].count * 100.0) / world.allocator.tree.region[i].size) + "%%" + (i == world.allocator.tree.regions-1 ? "" : ", ");
-                s += "]), twig: ("
-                  + to_string(world.allocator.twig.regions)
-                  + " buffer(s), size: [";
-                for (int i = 0; i < world.allocator.twig.regions; ++i)
-                    s += bytesize(world.allocator.twig.region[i].size) + (i == world.allocator.twig.regions-1 ? "" : ", ");
-                s += "], usage: [";
-                for (int i = 0; i < world.allocator.twig.regions; ++i)
-                    s += to_string(((float)world.allocator.twig.region[i].count * 100.0) / world.allocator.twig.region[i].size) + "%%" + (i == world.allocator.twig.regions-1 ? "" : ", ");
-                s += "])";
+                         + " buffers total | tree: (" 
+                         + allocator_to_string(world.allocator.tree)
+                         + ") | twig: ("
+                         + allocator_to_string(world.allocator.twig)
+                         + ")";
                 text.printf(s.c_str());
             }
 
@@ -281,6 +291,7 @@ int main()
         frame.restart();
     }
 
+    shadowmap.release();
     pointLightContext.release();
     skybox.release();
     world.deinit();
@@ -451,11 +462,14 @@ void initializeControls()
     input.bindKey('c', [&]() { replace(); });
     input.bindKey('g', [&]() { 
         // Ocroot r = world.chunk[0].defragcopy();
-        Ocroot r = world.chunk[0].lodmm();
+        using glm::ivec3;
+        ivec3 ip = world.index_float(camera.position);
+        int i = world.index(ip.x, ip.y, ip.z);
+        Ocroot r = world.chunk[i].lodmm();
         print(&r);
-        world.chunk[0] = r;
+        world.chunk[i] = r;
         Ocdelta tree(true), twig(true);
-        world.modify(0, &tree, &twig);
+        world.modify(i, &tree, &twig);
     });
     input.bindKey('1', [&]() { world.shift(glm::ivec3(1, 0, 0)); });
     input.bindKey('2', [&]() { world.shift(glm::ivec3(-1, 0, 0)); });
@@ -481,9 +495,9 @@ void initializeControls()
             cursor = false;
         }
         else if (e.button.button == SDL_BUTTON_X1)
-            camera.roll_deg -= (float)sensitivity * 10;
+            camera.roll_deg -= (float)sensitivity * 50;
         else if (e.button.button == SDL_BUTTON_X2)
-            camera.roll_deg += (float)sensitivity * 10;
+            camera.roll_deg += (float)sensitivity * 50;
     });
 
     input.bind(SDL_MOUSEMOTION, [&](SDL_Event& e) {
