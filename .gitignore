@@ -10,6 +10,6 @@ lib/*
 *.ilk
 *.pdb
 *.txt
-*.png
+**/*.png
 *.tree
 *.
