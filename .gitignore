@@ -11,5 +11,6 @@ lib/*
 *.pdb
 *.txt
 **/*.png
+**/*.jpg
 *.tree
 *.
