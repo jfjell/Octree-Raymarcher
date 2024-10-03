@@ -50,12 +50,15 @@ World world;
 GBuffer gbuffer;
 Counter sw;
 PerspectiveCamera camera;
+OrthoCamera ortho;
+bool use_ortho = false;
 bool cursor = false;
 
 using glm::mat4;
 using glm::vec3;
 
 void computeTarget(const World *world);
+void showInfoText(Counter &frame, int culled);
 // void computeMVP(mat4 *p, mat4 *v);
 void initialize();
 void deinitialize();
@@ -75,41 +78,9 @@ int main()
     imag.init(glm::vec3(3.0, 1.0, 0.5));
 
     world.init(4, 4, 4, 128);
-    print(&world.chunk[0]);
     world.load_gpu();
 
     gbuffer.init(width, height);
-
-    gbuffer.enable();
-    // glEnable(GL_DEPTH_TEST);
-    // glDepthFunc(GL_LESS);
-
-    // glEnable(GL_BLEND);
-    // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
-
-    /*
-    glEnable(GL_STENCIL_TEST);
-    glStencilMask(0xff);
-    glClearStencil(0);
-    glStencilFunc(GL_NOTEQUAL, 1, 0xff);
-    glStencilOp(GL_KEEP, GL_INCR, GL_INCR);
-    */
-
-    /*
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
-    glFrontFace(GL_CCW); 
-    */
-
-    int sbits = 0;
-    glGetIntegerv(GL_STENCIL_BITS, &sbits);
-    // assert(sbits > 0);
-
-    int mts = 0;
-    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mts);
-    printf("GL_MAX_TEXTURE_SIZE=%d\n", mts);
-
-    gbuffer.disable();
 
     Worm worm;
     worm.init();
@@ -130,7 +101,7 @@ int main()
     PointLight pointLight;
     pointLight.position = vec3(50, 8, 65);
     pointLight.color = vec3(0.8, 0.6, 0.2);
-    pointLight.ambient = vec3(0.2);
+    pointLight.ambient = vec3(0.1);
     pointLight.diffuse = vec3(0.5);
     pointLight.specular = vec3(1);
     pointLight.constant = 1.0;
@@ -141,14 +112,15 @@ int main()
     pointLightContext.init();
 
     DirectionalLight directionalLight;
-    directionalLight.direction = glm::normalize(vec3(-0.2, -1.0, -0.3));
-    directionalLight.ambient = vec3(0.6, 0.6, 0.8);
+    directionalLight.position = vec3(250, 125, 250);
+    directionalLight.direction = glm::normalize(vec3(1, -1, 0));
+    directionalLight.ambient = vec3(0.2, 0.3, 0.4);
     directionalLight.diffuse = vec3(0.3, 0.3, 0.6);
     directionalLight.specular = vec3(0);
 
     Spotlight spotlight;
     spotlight.position = vec3(50, 20, 70);
-    spotlight.direction = glm::normalize(vec3(0.1, -1.0, -0.1));
+    spotlight.direction = glm::normalize(vec3(-0.1, -1.0, -0.1));
     spotlight.ambient = vec3(0.2, 0.8, 0.3);
     spotlight.diffuse = vec3(0.2, 0.8, 0.3);
     spotlight.specular = vec3(1);
@@ -175,23 +147,60 @@ int main()
     shadowmap.init(width, height);
 
     OrthoCamera dcamera;
-    dcamera.direction = directionalLight.direction;
-    dcamera.near = NEAR;
-    dcamera.far = FAR;
+    dcamera.near = -FAR*100;
+    dcamera.far = FAR*100;
     dcamera.width = width;
     dcamera.height = height;
+    dcamera.up = vec3(0, 1, 0);
+
+    WorldShaderContext world_shadow = WorldShaderContext(Shader(glCreateProgram())
+        .vertex("shaders/ShadowmapWorld.Vertex.glsl")
+        .include("shaders/Chunkmarch.glsl")
+        .fragment("shaders/ShadowmapWorld.Fragment.glsl")
+        .link());
+    world_shadow.bind_ul();
 
     while (running) 
     {
+        float t = (double)clock() / CLOCKS_PER_SEC;
+        directionalLight.position.y = sin(t * 0.2) * 250;
+        directionalLight.position.x = 250 + cos(t * 0.2) * 250;
+        directionalLight.direction = glm::normalize(vec3(250, 0, 250) - directionalLight.position);
+        dcamera.position = directionalLight.position;
+        dcamera.direction = directionalLight.direction;
+
         input.poll();
 
         mat4 p = camera.proj();
         mat4 v = camera.view();
+
+        ortho.position = camera.position;
+        ortho.direction = camera.direction;
+        ortho.up = camera.up;
+        ortho.near = -FAR*100;
+        ortho.far = FAR*100;
+        ortho.width = width;
+        ortho.height = height;
+
+        if (use_ortho) p = ortho.proj();
+        if (use_ortho) v = ortho.view();
+
         mat4 mvp = p * v;
+
+        // Draw shadowmap
+        shadowmap.enable();
+        glClear(GL_DEPTH_BUFFER_BIT);
+
+        auto shadowVP = dcamera.proj() * dcamera.view();
+
+        world.draw_shadowmap(shadowVP, directionalLight, shadowmap, world_shadow);
+
+        shadowmap.disable();
 
         glClearColor(0.f, 0.f, 0.f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        // Draw the normal world
         gbuffer.enable();
         glDisable(GL_FRAMEBUFFER_SRGB);
 
@@ -200,7 +209,6 @@ int main()
 
         int culled = 0;
 
-        float t = (double)clock() / CLOCKS_PER_SEC;
         pointLight.position.x = 50.0 + cos(t) * 10.f;
         pointLight.position.z = 65.0 + sin(t) * 10.f;
 
@@ -210,19 +218,14 @@ int main()
         directionalLight.bind(world.shader_context.shader, "directionalLight");
         spotlight.bind(world.shader_context.shader, "spotlight");
 
-        world.draw(mvp, camera.position);
+        // Draw normal
+        world.draw(mvp, camera.position, &shadowmap, &shadowVP);
         pointLightContext.draw(mvp, pointLight.position, pointLight.color);
         pointLightContext.draw(mvp, spotlight.position, spotlight.diffuse);
+        pointLightContext.draw(mvp, directionalLight.position, directionalLight.ambient);
 
         skybox.draw(v, p);
 
-        glDisable(GL_STENCIL_TEST);
-
-        glDisable(GL_CULL_FACE);
-        glDisable(GL_STENCIL_TEST);
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_LESS);
-        glEnable(GL_BLEND);
         computeTarget(&world);
         if (imag.real) 
             imag.draw(mvp);
@@ -235,55 +238,9 @@ int main()
 
         if (textframe.elapsed() > 1. / 24)
         {
-
-            double avg = frame.avg();
-            text.clear();
-            text.printf("frame time: %lfms, fps: %lf", avg * 1000, 1.0 / avg);
-            text.printf("width: %d, height: %d", width, height);
-            text.printf("fov: %f, yaw: %f, pitch: %f, roll: %f", camera.fov_deg, camera.yaw_deg, camera.pitch_deg, camera.roll_deg);
-            text.printf("x: %f, y: %f, z: %f, ", camera.position.x, camera.position.y, camera.position.z);
-            text.printf("speed: %f", speed);
-            text.printf("grid size: %dx%dx%d = %d", world.width, world.height, world.depth, world.volume);
-            text.printf("culled/trees: %d/%d = %f%%", culled, world.volume, (float)culled * 100 / world.volume);
-            {
-                using std::string;
-                using std::to_string;
-
-                auto bytesize = [&](int64_t B) -> string
-                {
-                    constexpr int64_t K = 1024, M = K*K, G = M*K, T = G*K;
-                    if (B >= T) return to_string(B / T) + " TB";
-                    if (B >= G) return to_string(B / G) + " GB";
-                    if (B >= M) return to_string(B / M) + " MB";
-                    if (B >= K) return to_string(B / K) + " KB";
-                    return to_string(B) + " B";
-                };
-
-                auto allocator_to_string = [&](Allocator a) -> string
-                {
-                    string s = "" + to_string(a.regions) + " buffers; size: ";
-                    for (int i = 0; i < a.regions; ++i)
-                        s += bytesize(a.region[i].size) + (i == a.regions - 1 ? "" : ", ");
-                    s += "; used: ";
-                    for (int i = 0; i < a.regions; ++i)
-                        s += "~" + to_string(a.region[i].count * 100 / a.region[i].size) + "%%" + (i == a.regions - 1 ? "" : ", ");
-                    return s;
-                };
-
-                int buffers = world.allocator.tree.regions + world.allocator.twig.regions;
-                string s = string("") 
-                         + to_string(buffers) 
-                         + " buffers total | tree: (" 
-                         + allocator_to_string(world.allocator.tree)
-                         + ") | twig: ("
-                         + allocator_to_string(world.allocator.twig)
-                         + ")";
-                text.printf(s.c_str());
-            }
-
+            showInfoText(frame, culled);
             textframe.restart();
         }
-        glDisable(GL_DEPTH_TEST);
         text.draw();
 
         SDL_GL_SwapWindow(window);
@@ -291,6 +248,7 @@ int main()
         frame.restart();
     }
 
+    glDeleteProgram(world_shadow.shader);
     shadowmap.release();
     pointLightContext.release();
     skybox.release();
@@ -301,6 +259,56 @@ int main()
     deinitialize();
 
     return 0;
+}
+
+void showInfoText(Counter &frame, int culled)
+{
+    double avg = frame.avg();
+    text.clear();
+    text.printf("frame time: %lfms, fps: %lf", avg * 1000, 1.0 / avg);
+    text.printf("width: %d, height: %d", width, height);
+    text.printf("fov: %f, yaw: %f, pitch: %f, roll: %f", camera.fov_deg, camera.yaw_deg, camera.pitch_deg, camera.roll_deg);
+    text.printf("position: (%f, %f, %f)", camera.position.x, camera.position.y, camera.position.z);
+    text.printf("looking at: (%f, %f, %f), up: (%f, %f, %f)", camera.direction.x, camera.direction.y, camera.direction.z, camera.up.x, camera.up.y, camera.up.z);
+    text.printf("projection: %s", use_ortho ? "Orthographic" : "Perspective");
+    text.printf("speed: %f", speed);
+    text.printf("grid size: %dx%dx%d = %d", world.width, world.height, world.depth, world.volume);
+    text.printf("culled/trees: %d/%d = %f%%", culled, world.volume, (float)culled * 100 / world.volume);
+    {
+        using std::string;
+        using std::to_string;
+
+        auto bytesize = [&](int64_t B) -> string
+        {
+            constexpr int64_t K = 1024, M = K*K, G = M*K, T = G*K;
+            if (B >= T) return to_string(B / T) + " TB";
+            if (B >= G) return to_string(B / G) + " GB";
+            if (B >= M) return to_string(B / M) + " MB";
+            if (B >= K) return to_string(B / K) + " KB";
+            return to_string(B) + " B";
+        };
+
+        auto allocator_to_string = [&](Allocator a) -> string
+        {
+            string s = "" + to_string(a.regions) + " buffers; size: ";
+            for (int i = 0; i < a.regions; ++i)
+                s += bytesize(a.region[i].size) + (i == a.regions - 1 ? "" : ", ");
+            s += "; used: ";
+            for (int i = 0; i < a.regions; ++i)
+                s += "~" + to_string(a.region[i].count * 100 / a.region[i].size) + "%%" + (i == a.regions - 1 ? "" : ", ");
+            return s;
+        };
+
+        int buffers = world.allocator.tree.regions + world.allocator.twig.regions;
+        string s = string("") 
+                    + to_string(buffers) 
+                    + " buffers total | tree: (" 
+                    + allocator_to_string(world.allocator.tree)
+                    + ") | twig: ("
+                    + allocator_to_string(world.allocator.twig)
+                    + ")";
+        text.printf(s.c_str());
+    }
 }
 
 void computeTarget(const World *w)
@@ -358,40 +366,6 @@ void replace()
     };
     modify(&imag, &world, dr);
 }
-
-using glm::mat4;
-
-/*
-void computeMVP(mat4 *p, mat4 *v)
-{
-    using glm::mat4;
-    using glm::vec3;
-
-    const float cv = cos(vertAngle);
-    const float sv = sin(vertAngle);
-    const float ch = cos(horzAngle);
-    const float sh = sin(horzAngle);
-
-    direction = glm::normalize(vec3(cv * sh, sv, cv * ch));
-    right     = vec3(sin(horzAngle - M_PI/2.f), 0, cos(horzAngle - M_PI/2.f));
-    up        = glm::cross(right, direction);
-
-    const mat4 I = mat4(1.f);
-    const mat4 T = I; 
-    const mat4 S = I;
-    const mat4 R = I;
-    const mat4 SRT = T * S * R;
-    const mat4 M = SRT;
-    const mat4 P = glm::perspective(fov/2, (float)width / height, NEAR, FAR);
-    const mat4 V = glm::lookAt(position, position + direction, up);
-    const mat4 MVP = P * V * M;
-
-    *p = P;
-    *v = V;
-
-    mvp = MVP;
-}
-*/
 
 void initialize()
 {
@@ -455,6 +429,7 @@ void initializeControls()
     input.bindKey('s', [&]() { camera.position -= camera.direction * speed; });
     input.bindKey('a', [&]() { camera.position -= camera.right * speed; });
     input.bindKey('d', [&]() { camera.position += camera.right * speed; });
+    input.bindKey('p', [&]() { use_ortho = !use_ortho; });
     input.bindKey('+', [&]() { imag.scale += 0.5; });
     input.bindKey('-', [&]() { imag.scale = glm::max(imag.scale - 0.5f, 0.0f); });
     input.bindKey('x', [&]() { destroy(); });

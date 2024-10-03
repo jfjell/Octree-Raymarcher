@@ -84,11 +84,11 @@ void World::load_gpu()
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-    shader_context.shader = Shader(glCreateProgram())
+    shader_context = WorldShaderContext(Shader(glCreateProgram())
         .vertex("shaders/World.Vertex.glsl")
         .include("shaders/Chunkmarch.glsl")
         .fragment("shaders/World.Fragment.glsl")
-        .link();
+        .link());
 
     shader_context.bind_ul();
 }
@@ -105,6 +105,8 @@ void WorldShaderContext::bind_ul()
     model_ul = glGetUniformLocation(shader, "model");
     mvp_ul = glGetUniformLocation(shader, "mvp");
 
+    sdm_ul = glGetUniformLocation(shader, "ShadowDepthMap");
+    shadowVP_ul = glGetUniformLocation(shader, "shadowVP");
     diffuse_ul = glGetUniformLocation(shader, "Diffuse");
     specular_ul = glGetUniformLocation(shader, "Specular");
 
@@ -117,6 +119,11 @@ void WorldShaderContext::bind_ul()
     assert(eye_ul != -1);
     assert(model_ul != -1);
     assert(mvp_ul != -1);
+
+    // assert(sdm_ul != -1);
+    // assert(shadowVP_ul != -1);
+    // assert(diffuse_ul != -1);
+    // assert(specular_ul != -1);
 }
 
 void World::deinit()
@@ -152,7 +159,50 @@ static mat4 srt(vec3 chunkmin, vec3 bounds)
     return srt;
 }
 
-void World::draw(mat4 mvp, vec3 eye)
+void World::draw_shadowmap(const mat4& viewproj, const DLight& d, const Shadowmap& shadowmap, const WorldShaderContext &c)
+{
+    (void)shadowmap;
+
+    vec3 bounds = vec3(width, height, depth);
+    vec3 chunkmin = chunkcoordmin * chunksize;
+    vec3 chunkmax = chunkmin + bounds * (float)chunksize;
+    mat4 model = srt(chunkmin, bounds * (float)chunksize);
+
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_BLEND);
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+
+    glBindVertexArray(vao);
+
+    glUseProgram(c.shader);
+
+    glUniform3fv(glGetUniformLocation(c.shader, "direction"), 1, glm::value_ptr(d.direction));
+    glUniform3fv(c.chunkmin_ul, 1, glm::value_ptr(chunkmin));
+    glUniform3fv(c.chunkmax_ul, 1, glm::value_ptr(chunkmax));
+    glUniform1f(c.chunksize_ul, (float)chunksize);
+    glUniform1i(c.w_ul, width);
+    glUniform1i(c.h_ul, height);
+    glUniform1i(c.d_ul, depth);
+    glUniform3fv(c.eye_ul, 1, glm::value_ptr(d.position));
+    glUniformMatrix4fv(c.model_ul, 1, GL_FALSE, glm::value_ptr(model));
+    glUniformMatrix4fv(c.mvp_ul, 1, GL_FALSE, glm::value_ptr(viewproj));
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, WorldShaderContext::CHUNK_SSBO_BINDING, chunk_ssbo);
+    allocator.bind();
+
+    glDrawElements(GL_TRIANGLES, sizeof(CUBE_INDICES) / sizeof(unsigned short), GL_UNSIGNED_SHORT, (void *)0);
+
+    glUseProgram(shader_context.shader);
+    glUniform3fv(glGetUniformLocation(shader_context.shader, "directionalLight.position"), 1, glm::value_ptr(d.position));
+
+    glBindVertexArray(0);
+    glUseProgram(0);
+}
+
+void World::draw(mat4 mvp, vec3 eye, const Shadowmap *shadowmap, const mat4 *shadowVP)
 {
     vec3 bounds = vec3(width, height, depth);
     vec3 chunkmin = chunkcoordmin * chunksize;
@@ -183,13 +233,27 @@ void World::draw(mat4 mvp, vec3 eye)
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, WorldShaderContext::CHUNK_SSBO_BINDING, chunk_ssbo);
     allocator.bind();
+    
+    if (c.diffuse_ul != -1)
+    {
+        glUniform1i(c.diffuse_ul, 0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, atlas.diffuse);
+    }
+    if (c.specular_ul != -1)
+    {
+        glUniform1i(c.specular_ul, 1);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, atlas.specular);
+    }
+    if (c.sdm_ul != -1 && c.shadowVP_ul != -1)
+    {
+        glUniform1i(c.sdm_ul, 2);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, shadowmap->depth);
 
-    glUniform1i(c.diffuse_ul, 0);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, atlas.diffuse);
-    glUniform1i(c.specular_ul, 1);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, atlas.specular);
+        glUniformMatrix4fv(c.shadowVP_ul, 1, GL_FALSE, glm::value_ptr(*shadowVP));
+    }
 
     glDrawElements(GL_TRIANGLES, sizeof(CUBE_INDICES) / sizeof(unsigned short), GL_UNSIGNED_SHORT, (void *)0);
 

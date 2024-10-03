@@ -16,12 +16,12 @@ LD=link
 CPPFLAGS=/Iinclude \
 	/DSDL_MAIN_HANDLED \
 	/D_CRT_SECURE_NO_WARNINGS \
-	/std:c++17 \
+	/std:c++20 \
 	/Od \
 	/W4 \
 	/WX \
 	/EHsc \
-	/wd4458 /wd4201
+	/wd4458 /wd4201 /wd4305 /wd4244 /wd4267
 LDFLAGS=/LIBPATH:lib \
 	SDL2main.lib \
 	SDL2.lib \

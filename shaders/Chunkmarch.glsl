@@ -190,7 +190,7 @@ Leaf descend(vec3 p, int root)
 bool twigmarch(uint i, uint ignore,
     vec3 a, vec3 b, vec3 g,
     vec3 cmin, float size, float leafsize, int root,
-    out float s, out Leaf hitleaf, inout int steps)
+    out float s, out Leaf hit, inout int steps)
 {
     vec3 cmax = cmin + size;
     vec3 imin = vec3(0);
@@ -225,7 +225,7 @@ bool twigmarch(uint i, uint ignore,
         if (bark != 0)
         {
             s = t;
-            hitleaf = Leaf(leafmin, leafsize, bark);
+            hit = Leaf(leafmin, leafsize, bark);
             steps += _step;
             return true;
         }
@@ -239,7 +239,7 @@ bool twigmarch(uint i, uint ignore,
 
 bool treemarch(vec3 a, vec3 b, vec3 g,
     uint ignore, int root,
-    out float s, out Leaf hitleaf, inout int steps)
+    out float s, out Leaf hit, inout int steps)
 {
     vec3 rmin = Chunk[root].bmin;
     vec3 rmax = rmin + chunksize;
@@ -262,7 +262,7 @@ bool treemarch(vec3 a, vec3 b, vec3 g,
 
         if (type == LEAF)
         {
-            hitleaf = Leaf(leafmin, leaf.size, Tree_offset(value));
+            hit = Leaf(leafmin, leaf.size, Tree_offset(value));
             s = t;
             steps += _step;
             return true;
@@ -280,7 +280,7 @@ bool treemarch(vec3 a, vec3 b, vec3 g,
                 if (twigmarch(Twig_offset(value), ignore,
                     p, b, g,
                     leafmin, leaf.size, leafsize, root,
-                    u, hitleaf, steps))
+                    u, hit, steps))
                 {
                     s = t + u;
                     steps += _step;
@@ -294,7 +294,7 @@ bool treemarch(vec3 a, vec3 b, vec3 g,
     return false;
 }
 
-bool rootmarch(vec3 a, vec3 b, vec3 g, out float s, out Leaf hitleaf, inout int steps)
+bool rootmarch(vec3 a, vec3 b, vec3 g, out float s, out Leaf hit, inout int steps)
 {
     float t = 0;
     bool enter = true;
@@ -316,7 +316,7 @@ bool rootmarch(vec3 a, vec3 b, vec3 g, out float s, out Leaf hitleaf, inout int 
         vec3 rmax = rmin + chunksize;
 
         float u = 0;
-        if (treemarch(p, b, g, 0, r, u, hitleaf, steps))
+        if (treemarch(p, b, g, 0, r, u, hit, steps))
         {
             s = t + u;
             steps += _step;

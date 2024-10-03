@@ -7,6 +7,7 @@
 #include <glm/vec3.hpp>
 #include "Allocator.h"
 #include "Atlas.h"
+#include "Light.h"
 
 struct Ocroot;
 struct Ocdelta;
@@ -34,6 +35,7 @@ struct WorldShaderContext
     unsigned int shader;
     int chunkmin_ul, chunkmax_ul, chunksize_ul, w_ul, h_ul, d_ul, eye_ul, model_ul, mvp_ul;
     int diffuse_ul, specular_ul;
+    int shadowVP_ul, sdm_ul;
 
     WorldShaderContext(unsigned int s = 0) : shader(s) { }
     void bind_ul();
@@ -57,7 +59,8 @@ struct World
     void init(int w, int h, int d, int s);
     void deinit();
     void load_gpu();
-    void draw(glm::mat4 mvp, glm::vec3 eye);
+    void draw_shadowmap(const glm::mat4& viewproj, const DLight& position, const Shadowmap& shadowmap, const WorldShaderContext &context);
+    void draw(glm::mat4 mvp, glm::vec3 eye, const Shadowmap *shadowmap = nullptr, const glm::mat4 *shadowVP = nullptr);
     void modify(int i, const Ocdelta *tree, const Ocdelta *twig);
     void g_pyramid(int x, int z);
     void g_chunk(int x, int y, int z);

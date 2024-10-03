@@ -68,6 +68,12 @@ void ImaginaryCube::draw(mat4 mvp)
     const mat4 R = mat4(1.0);
     const mat4 SRT = T * R * S;
 
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_STENCIL_TEST);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    glEnable(GL_BLEND);
+
     glBindVertexArray(this->vao);
     glUseProgram(this->shader);
 

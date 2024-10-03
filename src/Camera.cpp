@@ -12,8 +12,8 @@ using glm::angleAxis;
 
 static inline float reduce_angle_deg(float theta)
 {
-    float phi = fmod(theta, 360);
-    phi = fmod(phi + 360, 360);
+    float phi = (float)fmod(theta, 360);
+    phi = (float)fmod(phi + 360, 360);
     if (phi > 180) phi -= 360;
     return phi;
 }
@@ -38,18 +38,18 @@ mat4 PerspectiveCamera::view()
 mat4 PerspectiveCamera::proj()
 {
     float aspect = (float)width / height;
-    float half_fov_deg = fov_deg * 0.5;
+    float half_fov_deg = fov_deg * 0.5f;
     return glm::perspective(half_fov_deg, aspect, near, far);
 }
 
 mat4 OrthoCamera::view()
 {
-    return glm::lookAt(normalize(-direction), vec3(0), vec3(0, 1, 0));
+    return glm::lookAt(position, vec3(250, 0, 250), up);
 }
 
 mat4 OrthoCamera::proj()
 {
-    float w = (float)width * 0.5;
-    float h = (float)height * 0.5;
+    float w = 0.5f * width, h = 0.5f * height;
     return glm::ortho(-w, w, -h, h, near, far);
+    // return glm::ortho(-far, far, -far, far, near, far);
 }

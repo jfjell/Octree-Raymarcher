@@ -24,6 +24,7 @@ typedef PointLight PLight;
 
 struct DirectionalLight
 {
+    glm::vec3 position;
     glm::vec3 direction;
     glm::vec3 ambient;
     glm::vec3 diffuse;
